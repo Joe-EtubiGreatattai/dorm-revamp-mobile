@@ -1,7 +1,7 @@
 # Frontend-Backend Integration Guide
 
 ## Backend Server Status
-✅ **Server is running on:** http://192.168.0.130:5001  
+✅ **Server is running on:** https://dorm-revamp-backend.onrender.com  
 ✅ **Socket.io ready:** ws://192.168.0.130:5001
 
 ## Quick Start
@@ -13,8 +13,8 @@ npm install axios socket.io-client
 
 ### 2. API Configuration
 The API config is already set up in `/config/api.ts`:
-- REST API: `http://192.168.0.130:5001/api`
-- Socket.io: `http://192.168.0.130:5001`
+- REST API: `https://dorm-revamp-backend.onrender.com/api`
+- Socket.io: `https://dorm-revamp-backend.onrender.com`
 
 ### 3. Using the API Client
 
@@ -207,10 +207,10 @@ export default function FeedScreen() {
 ### Test API directly:
 ```bash
 # Test from terminal
-curl http://192.168.0.130:5001/api/auth/me
+curl https://dorm-revamp-backend.onrender.com/api/auth/me
 
 # Or test in browser
-http://192.168.0.130:5001
+https://dorm-revamp-backend.onrender.com
 ```
 
 ## Troubleshooting
