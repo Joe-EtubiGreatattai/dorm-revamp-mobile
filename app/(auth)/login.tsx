@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
 import {
     KeyboardAvoidingView,
@@ -58,9 +59,28 @@ export default function LoginScreen() {
         });
 
         if (result.success) {
-            // In a real app, you'd verify a saved token
-            await login('saved_user@edu.ng', 'mock_password');
-            router.replace('/(tabs)');
+            try {
+                const bioEmail = await SecureStore.getItemAsync('biometric_email');
+                const bioPassword = await SecureStore.getItemAsync('biometric_password');
+
+                if (bioEmail && bioPassword) {
+                    await login(bioEmail, bioPassword);
+                    router.replace('/(tabs)');
+                } else {
+                    showAlert({
+                        title: 'Biometric Login Not Set Up',
+                        description: 'Please log in with your password first, then enable biometrics if you want to use it.',
+                        type: 'error'
+                    });
+                }
+            } catch (error) {
+                console.log('Biometric login error:', error);
+                showAlert({
+                    title: 'Login Error',
+                    description: 'Could not retrieve credentials. Please login manually.',
+                    type: 'error'
+                });
+            }
         }
     };
 

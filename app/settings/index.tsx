@@ -90,9 +90,6 @@ export default function SettingsScreen() {
                             <Text style={[styles.badgeText, { color: '#166534' }]}>Verified Student</Text>
                         </View>
                     </View>
-                    <TouchableOpacity onPress={() => router.push('/settings/account')} style={styles.editBtn}>
-                        <Ionicons name="pencil" size={20} color={colors.subtext} />
-                    </TouchableOpacity>
                 </View>
 
                 {/* Account */}

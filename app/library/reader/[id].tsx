@@ -26,7 +26,58 @@ export default function MaterialReader() {
     const [isMenuVisible, setMenuVisible] = useState(false);
     const [isModalVisible, setModalVisible] = useState(false);
     const [modalConfig, setModalConfig] = useState({ title: '', description: '', icon: 'checkmark-circle' as any, color: '#0ea5e9' });
-    const totalPages = 15; // Mock page count for simulation
+
+    // Pagination Logic
+    const PAGE_SIZE = 1800; // Character count per page
+    const contentPages = material?.content ? (material.content.match(new RegExp(`[\\s\\S]{1,${PAGE_SIZE}}`, 'g')) || []) : [];
+    const totalPages = contentPages.length > 0 ? contentPages.length + 1 : 15; // +1 for Cover Page
+
+    const renderFormattedContent = (text: string) => {
+        if (!text) return null;
+
+        const lines = text.split('\n');
+        return lines.map((line, index) => {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) return <View key={index} style={{ height: 10 }} />;
+
+            // Detect Headers (All uppercase or starts with Phase, Summary, etc.)
+            const isHeader = /^[A-Z0-9\s—.]{5,}$/.test(trimmedLine) ||
+                trimmedLine.startsWith('Phase') ||
+                trimmedLine.startsWith('Summary') ||
+                trimmedLine.startsWith('Goal:');
+
+            // Detect List Items
+            const isBullet = trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*');
+            const isNumbered = /^\d+\./.test(trimmedLine);
+
+            if (isHeader) {
+                return (
+                    <Text key={index} style={[styles.headerText, { color: colors.text }]}>
+                        {trimmedLine}
+                    </Text>
+                );
+            }
+
+            if (isBullet || isNumbered) {
+                return (
+                    <View key={index} style={styles.listItem}>
+                        <Text style={[styles.bulletPoint, { color: colors.primary }]}>
+                            {isBullet ? '•' : ''}
+                        </Text>
+                        <Text style={[styles.listText, { color: colors.text }]}>
+                            {isBullet ? trimmedLine.substring(1).trim() : trimmedLine}
+                        </Text>
+                    </View>
+                );
+            }
+
+            return (
+                <Text key={index} style={[styles.paragraphText, { color: colors.text }]}>
+                    {trimmedLine}
+                </Text>
+            );
+        });
+    };
 
     useEffect(() => {
         const fetchMaterial = async () => {
@@ -152,9 +203,8 @@ export default function MaterialReader() {
                                 setMenuVisible(false);
                                 setIsLoading(true); // Reuse loading or add new state
                                 try {
-                                    // Use first page text or whole text?
-                                    // Mock text for now since 'material' doesn't have full content in this view
-                                    const textToSummarize = "Academic Text Content...";
+                                    // Use extracted content for summarization
+                                    const textToSummarize = material.content || "No extracted content available for this document.";
                                     const { data } = await libraryAPI.summarize({ text: textToSummarize });
                                     setModalConfig({
                                         title: 'Material Summary',
@@ -178,16 +228,6 @@ export default function MaterialReader() {
                         >
                             <Ionicons name="sparkles-outline" size={20} color={colors.text} />
                             <Text style={[styles.menuText, { color: colors.text }]}>Get Summary</Text>
-                        </TouchableOpacity>
-
-                        <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-
-                        <TouchableOpacity
-                            style={styles.menuItem}
-                            onPress={() => setMenuVisible(false)}
-                        >
-                            <Ionicons name="share-outline" size={20} color={colors.text} />
-                            <Text style={[styles.menuText, { color: colors.text }]}>Share Page</Text>
                         </TouchableOpacity>
                     </View>
                 </TouchableOpacity>
@@ -214,19 +254,30 @@ export default function MaterialReader() {
                             styles.page,
                             {
                                 backgroundColor: colors.card,
-                                height: index === 0 ? 500 : 700
+                                minHeight: index === 0 ? 500 : 700,
+                                // Let only content pages have non-fixed heights if needed, 
+                                // but for true pagination feel, a fixed min-height is better.
                             }
                         ]}
                     >
                         {index === 0 ? (
                             // Cover Page
                             <View style={styles.coverPage}>
-                                <Image source={{ uri: material.previewImage }} style={styles.coverImage} contentFit="contain" />
+                                <Image
+                                    source={{ uri: material.coverUrl || material.previewImage || 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=1000&auto=format&fit=crop' }}
+                                    style={styles.coverImage}
+                                    contentFit="contain"
+                                />
                                 <Text style={[styles.coverTitle, { color: colors.text }]}>{material.title}</Text>
                                 <Text style={[styles.coverSubtitle, { color: colors.subtext }]}>{material.courseCode}</Text>
                             </View>
+                        ) : contentPages.length > 0 ? (
+                            // Actual Extracted Text (Paginated & Formatted)
+                            <View style={styles.textPage}>
+                                {renderFormattedContent(contentPages[index - 1])}
+                            </View>
                         ) : (
-                            // Content Text Mock
+                            // Content Text Mock (Fallback)
                             <View style={styles.textPage}>
                                 <Text style={[styles.pageText, { color: colors.text }]}>
                                     {`Chapter ${index}\n\nThis is a simulated reader view for page ${index + 1}. In a real application, this would render PDF pages or extracted text content for '${material.title}'.\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.`}
@@ -335,6 +386,36 @@ const styles = StyleSheet.create({
         fontFamily: 'PlusJakartaSans_400Regular',
         fontSize: 16,
         lineHeight: 26,
+    },
+    headerText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 18,
+        marginTop: 16,
+        marginBottom: 8,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    paragraphText: {
+        fontFamily: 'PlusJakartaSans_400Regular',
+        fontSize: 16,
+        lineHeight: 24,
+        marginBottom: 12,
+    },
+    listItem: {
+        flexDirection: 'row',
+        paddingLeft: 8,
+        marginBottom: 8,
+    },
+    bulletPoint: {
+        fontSize: 18,
+        marginRight: 8,
+        fontWeight: 'bold',
+    },
+    listText: {
+        flex: 1,
+        fontFamily: 'PlusJakartaSans_500Medium',
+        fontSize: 16,
+        lineHeight: 24,
     },
     footerPageNum: {
         textAlign: 'center',

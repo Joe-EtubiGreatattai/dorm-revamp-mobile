@@ -6,11 +6,66 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAlert } from '@/context/AlertContext';
+import { authAPI, bugAPI } from '@/utils/apiClient';
+import { ActivityIndicator, Image } from 'react-native';
+
 export default function ReportBug() {
     const router = useRouter();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
+    const { showAlert } = useAlert();
+
     const [description, setDescription] = useState('');
+    const [image, setImage] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const pickImage = async () => {
+        const { launchImageLibraryAsync, MediaTypeOptions } = await import('expo-image-picker');
+        const result = await launchImageLibraryAsync({
+            mediaTypes: MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [9, 16],
+            quality: 0.7,
+        });
+
+        if (!result.canceled) {
+            setImage(result.assets[0].uri);
+        }
+    };
+
+    const handleSubmit = async () => {
+        if (!description.trim()) return;
+        setIsLoading(true);
+
+        try {
+            let attachmentUrl = undefined;
+            if (image) {
+                attachmentUrl = await authAPI.uploadImage(image);
+            }
+
+            await bugAPI.reportBug({
+                description,
+                attachments: attachmentUrl ? [attachmentUrl] : []
+            });
+
+            showAlert({
+                title: 'Report Submitted',
+                description: 'Thank you for your feedback. Our team will investigate.',
+                type: 'success'
+            });
+            router.back();
+        } catch (error: any) {
+            console.error('Bug report error:', error);
+            showAlert({
+                title: 'Submission Failed',
+                description: 'Could not submit report. Please try again.',
+                type: 'error'
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -35,15 +90,33 @@ export default function ReportBug() {
                     multiline
                     value={description}
                     onChangeText={setDescription}
+                    textAlignVertical="top"
                 />
 
-                <TouchableOpacity style={[styles.uploadBtn, { borderColor: colors.border, borderStyle: 'dashed' }]}>
-                    <Ionicons name="image-outline" size={24} color={colors.primary} />
-                    <Text style={[styles.uploadText, { color: colors.primary }]}>Add Screenshot</Text>
+                <TouchableOpacity
+                    style={[styles.uploadBtn, { borderColor: colors.border, borderStyle: 'dashed' }]}
+                    onPress={pickImage}
+                >
+                    {image ? (
+                        <Image source={{ uri: image }} style={{ width: '100%', height: '100%', borderRadius: 14 }} resizeMode="cover" />
+                    ) : (
+                        <>
+                            <Ionicons name="image-outline" size={24} color={colors.primary} />
+                            <Text style={[styles.uploadText, { color: colors.primary }]}>Add Screenshot</Text>
+                        </>
+                    )}
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: description ? 1 : 0.5 }]} disabled={!description}>
-                    <Text style={styles.submitText}>Submit Report</Text>
+                <TouchableOpacity
+                    style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: (!description || isLoading) ? 0.5 : 1 }]}
+                    disabled={!description || isLoading}
+                    onPress={handleSubmit}
+                >
+                    {isLoading ? (
+                        <ActivityIndicator color="#fff" />
+                    ) : (
+                        <Text style={styles.submitText}>Submit Report</Text>
+                    )}
                 </TouchableOpacity>
 
             </ScrollView>

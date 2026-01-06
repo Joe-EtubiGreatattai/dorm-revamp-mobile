@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { commentAPI, postAPI } from '@/utils/apiClient';
 import { getSocket } from '@/utils/socket';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -182,6 +183,50 @@ export default function PostDetailScreen() {
         inputRef.current?.focus();
     };
 
+    const handleCopyLink = async () => {
+        setMenuVisible(false);
+        const postUrl = `https://dorm.app/post/${id}`;
+        await Clipboard.setStringAsync(postUrl);
+        showAlert({
+            title: 'Link Copied',
+            description: 'Post link has been copied to your clipboard.',
+            type: 'success'
+        });
+    };
+
+    const handleNotInterested = async () => {
+        setMenuVisible(false);
+        try {
+            await postAPI.notInterested(id as string);
+            router.back(); // Usually, if you're not interested, you want to leave the page
+        } catch (error) {
+            console.log('Error marking as not interested:', error);
+        }
+    };
+
+    const handleReport = async () => {
+        setMenuVisible(false);
+        showAlert({
+            title: 'Report Post',
+            description: 'Are you sure you want to report this post for inappropriate content?',
+            type: 'error',
+            showCancel: true,
+            buttonText: 'Report',
+            onConfirm: async () => {
+                try {
+                    await postAPI.reportPost(id as string, 'Inappropriate content');
+                    showAlert({
+                        title: 'Report Submitted',
+                        description: 'Thank you for keeping our community safe. We will review this post.',
+                        type: 'success'
+                    });
+                } catch (error) {
+                    console.log('Error reporting post:', error);
+                }
+            }
+        });
+    };
+
     const handlePostComment = async () => {
         if (!commentText.trim()) return;
 
@@ -286,17 +331,17 @@ export default function PostDetailScreen() {
                                 onPress={() => setMenuVisible(false)}
                             >
                                 <View style={[styles.menuContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                    <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                                    <TouchableOpacity style={styles.menuItem} onPress={handleCopyLink}>
                                         <Ionicons name="link-outline" size={20} color={colors.text} />
                                         <Text style={[styles.menuText, { color: colors.text }]}>Copy Link</Text>
                                     </TouchableOpacity>
                                     <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-                                    <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                                    <TouchableOpacity style={styles.menuItem} onPress={handleNotInterested}>
                                         <Ionicons name="eye-off-outline" size={20} color={colors.text} />
                                         <Text style={[styles.menuText, { color: colors.text }]}>Not interested</Text>
                                     </TouchableOpacity>
                                     <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-                                    <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                                    <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
                                         <Ionicons name="flag-outline" size={20} color={colors.error} />
                                         <Text style={[styles.menuText, { color: colors.error }]}>Report Post</Text>
                                     </TouchableOpacity>

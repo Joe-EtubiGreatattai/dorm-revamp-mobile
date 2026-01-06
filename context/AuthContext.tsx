@@ -17,7 +17,16 @@ type User = {
         comments?: boolean;
         follows?: boolean;
         messages?: boolean;
+        priceAlerts?: boolean;
+        orderUpdates?: boolean;
+        electionReminders?: boolean;
     };
+    privacySettings?: {
+        appLock: boolean;
+        onlineStatus: boolean;
+        readReceipts: boolean;
+    };
+    blockedUsers?: string[];
     walletBalance: number;
     escrowBalance: number;
     bankAccounts?: {

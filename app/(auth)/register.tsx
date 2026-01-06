@@ -27,7 +27,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 const Input = ({ label, icon, colors, rightIcon, onRightIconPress, ...props }: any) => (
     <View style={styles.inputGroup}>
@@ -71,8 +71,8 @@ export default function RegisterScreen() {
     const [resendTimer, setResendTimer] = useState(59);
 
     useEffect(() => {
-        let interval: NodeJS.Timeout;
-        if (currentStep === 4 && resendTimer > 0) {
+        let interval: any;
+        if (currentStep === 5 && resendTimer > 0) {
             interval = setInterval(() => {
                 setResendTimer((prev) => prev - 1);
             }, 1000);
@@ -81,7 +81,7 @@ export default function RegisterScreen() {
     }, [currentStep, resendTimer]);
 
     useEffect(() => {
-        if (currentStep === 4) {
+        if (currentStep === 5) {
             setTimeout(() => otpInputRef.current?.focus(), 500); // Increased delay
         }
     }, [currentStep]);
@@ -132,16 +132,20 @@ export default function RegisterScreen() {
         department: '',
         level: '',
         matricNo: '',
+        bio: '',
         email: '',
         password: '',
         confirmPassword: '',
         otp: '',
+        identityNumber: '',
+        identityType: 'bvn', // Default to BVN
+        kycDocument: null as string | null,
     });
 
     const nextStep = () => {
-        if (currentStep === 3) {
+        if (currentStep === 4) {
             initiateRegistration();
-        } else if (currentStep === 4) {
+        } else if (currentStep === 5) {
             handleVerifyEmail();
         } else {
             setCurrentStep((prev) => (prev + 1) as Step);
@@ -172,8 +176,12 @@ export default function RegisterScreen() {
             const data = new FormData();
             data.append('name', formData.fullName);
             data.append('email', formData.email);
+            data.append('bio', formData.bio);
             data.append('password', formData.password);
             data.append('university', formData.university);
+            data.append('matricNo', formData.matricNo);
+            data.append('identityNumber', formData.identityNumber);
+            data.append('identityType', formData.identityType);
 
             if (avatar) {
                 // @ts-ignore
@@ -192,7 +200,7 @@ export default function RegisterScreen() {
             setTempToken(token);
 
             setIsLoading(false);
-            setCurrentStep(4); // Move to OTP
+            setCurrentStep(5); // Move to OTP
         } catch (e: any) {
             setIsLoading(false);
             console.error(e);
@@ -211,11 +219,11 @@ export default function RegisterScreen() {
 
         setIsLoading(true);
         try {
-            await authAPI.verifyEmail(code);
+            await authAPI.verifyEmail(code, formData.email);
 
-            // SUCCESS: Only now we move to Step 5
+            // SUCCESS: Only now we move to Step 6
             setIsLoading(false);
-            setCurrentStep(5); // Move to Biometrics
+            setCurrentStep(6); // Move to Biometrics
         } catch (e: any) {
             setIsLoading(false);
             console.error('Verification Error:', e);
@@ -275,7 +283,18 @@ export default function RegisterScreen() {
                 promptMessage: 'Setup Biometric Login',
             });
             if (result.success) {
-                // In a real app, verify or store this preference
+                try {
+                    // Securely store credentials for future login
+                    await SecureStore.setItemAsync('biometric_email', formData.email);
+                    await SecureStore.setItemAsync('biometric_password', formData.password);
+                    showAlert({
+                        title: 'Biometrics Enabled',
+                        description: 'You can now use biometrics to log in next time.',
+                        type: 'success'
+                    });
+                } catch (error) {
+                    console.log('Error saving biometric credentials:', error);
+                }
             }
         }
         handleFinalize();
@@ -283,7 +302,7 @@ export default function RegisterScreen() {
 
     const renderProgressBar = () => (
         <View style={styles.progressContainer}>
-            {[1, 2, 3, 4, 5].map((step) => (
+            {[1, 2, 3, 4, 5, 6].map((step) => (
                 <View
                     key={step}
                     style={[
@@ -314,6 +333,7 @@ export default function RegisterScreen() {
                     ]}
                     keyboardShouldPersistTaps="handled"
                 >
+
                     {currentStep === 1 && (
                         <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
                             <Text style={[styles.stepTitle, { color: colors.text }]}>Personal Details</Text>
@@ -337,6 +357,14 @@ export default function RegisterScreen() {
                                     value={formData.fullName}
                                     onChangeText={(v: string) => setFormData({ ...formData, fullName: v })}
                                     icon="person-outline"
+                                    colors={colors}
+                                />
+                                <Input
+                                    label="Bio"
+                                    placeholder="Tell us about yourself"
+                                    value={formData.bio}
+                                    onChangeText={(v: string) => setFormData({ ...formData, bio: v })}
+                                    icon="information-circle-outline"
                                     colors={colors}
                                 />
                                 <Input
@@ -529,6 +557,92 @@ export default function RegisterScreen() {
 
                     {currentStep === 3 && (
                         <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
+                            <Text style={[styles.stepTitle, { color: colors.text }]}>Identity Verification</Text>
+                            <Text style={[styles.stepSubtitle, { color: colors.subtext }]}>Help us verify it's really you</Text>
+                            <View style={styles.form}>
+                                <View style={styles.inputGroup}>
+                                    <Text style={[styles.label, { color: colors.text }]}>Identity Type</Text>
+                                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                                        {['bvn', 'nin'].map((type) => (
+                                            <TouchableOpacity
+                                                key={type}
+                                                onPress={() => setFormData({ ...formData, identityType: type })}
+                                                style={[
+                                                    styles.radioBtn,
+                                                    {
+                                                        borderColor: formData.identityType === type ? colors.primary : colors.border,
+                                                        backgroundColor: formData.identityType === type ? colors.primary + '15' : 'transparent'
+                                                    }
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name={formData.identityType === type ? "radio-button-on" : "radio-button-off"}
+                                                    size={20}
+                                                    color={formData.identityType === type ? colors.primary : colors.subtext}
+                                                />
+                                                <Text style={[styles.radioText, { color: colors.text }]}>{type.toUpperCase()}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </View>
+
+                                <Input
+                                    label={`${formData.identityType.toUpperCase()} Number`}
+                                    placeholder={`Enter your 11-digit ${formData.identityType.toUpperCase()}`}
+                                    value={formData.identityNumber}
+                                    onChangeText={(v: string) => setFormData({ ...formData, identityNumber: v })}
+                                    icon="shield-checkmark-outline"
+                                    keyboardType="number-pad"
+                                    maxLength={11}
+                                    colors={colors}
+                                />
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={[styles.label, { color: colors.text }]}>Upload ID Document (Optional)</Text>
+                                    <TouchableOpacity
+                                        onPress={async () => {
+                                            const result = await ImagePicker.launchImageLibraryAsync({
+                                                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                                quality: 0.5,
+                                            });
+                                            if (!result.canceled) {
+                                                setFormData({ ...formData, kycDocument: result.assets[0].uri });
+                                            }
+                                        }}
+                                        style={[
+                                            styles.uploadBox,
+                                            {
+                                                backgroundColor: colors.card,
+                                                borderColor: colors.border,
+                                                borderStyle: 'dashed'
+                                            }
+                                        ]}
+                                    >
+                                        {formData.kycDocument ? (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                                                <Text style={[styles.uploadText, { color: colors.text }]}>Document Selected</Text>
+                                                <TouchableOpacity
+                                                    onPress={() => setFormData({ ...formData, kycDocument: null })}
+                                                    style={{ marginLeft: 'auto' }}
+                                                >
+                                                    <Ionicons name="close-circle" size={24} color={colors.subtext} />
+                                                </TouchableOpacity>
+                                            </View>
+                                        ) : (
+                                            <>
+                                                <Ionicons name="cloud-upload-outline" size={32} color={colors.subtext} />
+                                                <Text style={[styles.uploadText, { color: colors.subtext }]}>Tap to upload Student ID or NIN Slip</Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </Animated.View>
+                    )}
+
+                    {currentStep === 4 && (
+                        <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
                             <Text style={[styles.stepTitle, { color: colors.text }]}>Security</Text>
                             <Text style={[styles.stepSubtitle, { color: colors.subtext }]}>Create your access credentials</Text>
                             <View style={styles.form}>
@@ -567,7 +681,7 @@ export default function RegisterScreen() {
                         </Animated.View>
                     )}
 
-                    {currentStep === 4 && (
+                    {currentStep === 5 && (
                         <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
                             <Text style={[styles.stepTitle, { color: colors.text }]}>Verify Email</Text>
                             <Text style={[styles.stepSubtitle, { color: colors.subtext }]}>
@@ -631,7 +745,7 @@ export default function RegisterScreen() {
                         </Animated.View>
                     )}
 
-                    {currentStep === 5 && (
+                    {currentStep === 6 && (
                         <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
                             <View style={styles.biometricHeader}>
                                 <View style={[styles.bioIconBox, { backgroundColor: colors.primary + '15' }]}>
@@ -657,7 +771,7 @@ export default function RegisterScreen() {
                     )}
                 </ScrollView>
 
-                {currentStep < 5 && (
+                {currentStep < 6 && (
                     <View style={[styles.footer, { borderTopColor: colors.border }]}>
                         <TouchableOpacity
                             style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: isLoading ? 0.7 : 1 }]}
@@ -672,7 +786,7 @@ export default function RegisterScreen() {
                     </View>
                 )}
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 
@@ -850,5 +964,32 @@ const styles = StyleSheet.create({
     avatarText: {
         fontFamily: 'PlusJakartaSans_500Medium',
         fontSize: 12,
+    },
+    radioBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        gap: 8,
+        flex: 1,
+    },
+    radioText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 14,
+    },
+    uploadBox: {
+        height: 120,
+        borderRadius: 16,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        padding: 16,
+    },
+    uploadText: {
+        fontFamily: 'PlusJakartaSans_500Medium',
+        fontSize: 14,
     },
 });

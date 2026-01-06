@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function AccountSettings() {
@@ -142,48 +142,59 @@ export default function AccountSettings() {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            >
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.content}
+                    keyboardDismissMode="on-drag"
+                >
 
-                <View style={styles.avatarSection}>
-                    <AccountAvatar size={100} />
-                    <TouchableOpacity
-                        style={[styles.changePhotoBtn, { backgroundColor: colors.card }]}
-                        onPress={pickImage}
-                    >
-                        <Ionicons name="camera" size={20} color={colors.primary} />
-                        <Text style={[styles.changePhotoText, { color: colors.primary }]}>Change Photo</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: colors.text }]}>Full Name</Text>
-                    <TextInput
-                        style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
-                        value={name}
-                        onChangeText={setName}
-                    />
-                </View>
-
-                <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: colors.text }]}>University</Text>
-                    <View style={[styles.input, { backgroundColor: colors.card, justifyContent: 'center' }]}>
-                        <Text style={{ color: colors.subtext }}>{user?.university}</Text>
-                        <Ionicons name="lock-closed" size={14} color={colors.subtext} style={{ position: 'absolute', right: 16 }} />
+                    <View style={styles.avatarSection}>
+                        <AccountAvatar size={100} />
+                        <TouchableOpacity
+                            style={[styles.changePhotoBtn, { backgroundColor: colors.card }]}
+                            onPress={pickImage}
+                        >
+                            <Ionicons name="camera" size={20} color={colors.primary} />
+                            <Text style={[styles.changePhotoText, { color: colors.primary }]}>Change Photo</Text>
+                        </TouchableOpacity>
                     </View>
-                    <Text style={[styles.helperText, { color: colors.subtext }]}>Contact support to change your university.</Text>
-                </View>
 
-                <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: colors.text }]}>Bio</Text>
-                    <TextInput
-                        style={[styles.input, styles.textArea, { backgroundColor: colors.card, color: colors.text }]}
-                        value={bio}
-                        onChangeText={setBio}
-                        multiline
-                    />
-                </View>
+                    <View style={styles.inputGroup}>
+                        <Text style={[styles.label, { color: colors.text }]}>Full Name</Text>
+                        <TextInput
+                            style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
+                            value={name}
+                            onChangeText={setName}
+                        />
+                    </View>
 
-            </ScrollView>
+                    <View style={styles.inputGroup}>
+                        <Text style={[styles.label, { color: colors.text }]}>University</Text>
+                        <View style={[styles.input, { backgroundColor: colors.card, justifyContent: 'center' }]}>
+                            <Text style={{ color: colors.subtext }}>{user?.university}</Text>
+                            <Ionicons name="lock-closed" size={14} color={colors.subtext} style={{ position: 'absolute', right: 16 }} />
+                        </View>
+                        <Text style={[styles.helperText, { color: colors.subtext }]}>Contact support to change your university.</Text>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={[styles.label, { color: colors.text }]}>Bio</Text>
+                        <TextInput
+                            style={[styles.input, styles.textArea, { backgroundColor: colors.card, color: colors.text }]}
+                            value={bio}
+                            onChangeText={setBio}
+                            multiline
+                            textAlignVertical="top"
+                        />
+                    </View>
+
+                </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }

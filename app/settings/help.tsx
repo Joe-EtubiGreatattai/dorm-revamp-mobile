@@ -6,15 +6,40 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { supportAPI } from '@/utils/apiClient';
+import { useEffect, useState } from 'react';
+
+interface FAQ {
+    _id: string;
+    question: string;
+    answer: string;
+}
+
 export default function HelpCenter() {
     const router = useRouter();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
+    const [faqs, setFaqs] = useState<FAQ[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const renderFaq = (question: string, answer: string) => (
-        <View style={[styles.faqCard, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-            <Text style={[styles.question, { color: colors.text }]}>{question}</Text>
-            <Text style={[styles.answer, { color: colors.subtext }]}>{answer}</Text>
+    useEffect(() => {
+        const fetchFAQs = async () => {
+            try {
+                const res = await supportAPI.getFAQs();
+                setFaqs(res.data);
+            } catch (err) {
+                console.error('Failed to fetch FAQs', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchFAQs();
+    }, []);
+
+    const renderFaq = (item: FAQ) => (
+        <View key={item._id} style={[styles.faqCard, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <Text style={[styles.question, { color: colors.text }]}>{item.question}</Text>
+            <Text style={[styles.answer, { color: colors.subtext }]}>{item.answer}</Text>
         </View>
     );
 
@@ -33,9 +58,7 @@ export default function HelpCenter() {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
                 <Text style={[styles.sectionTitle, { color: colors.subtext }]}>Frequently Asked Questions</Text>
 
-                {renderFaq('How do I reset my password?', 'Go to Settings > Personal Information > Security & Login to change your password.')}
-                {renderFaq('Can I change my university?', 'University affiliation is verified during registration. Please contact support if you need to transfer.')}
-                {renderFaq('How does voting work?', 'Only verified students can vote in their respective faculty or departmental elections.')}
+                {faqs.map(renderFaq)}
 
                 <TouchableOpacity
                     style={[styles.contactBtn, { backgroundColor: colors.primary }]}

@@ -36,7 +36,7 @@ export default function LibraryScreen() {
                 ...m,
                 id: m._id || m.id,
                 type: m.fileType || 'pdf',
-                previewImage: m.fileUrl,
+                previewImage: m.coverUrl || (m.fileType === 'video' ? m.fileUrl : 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=1000&auto=format&fit=crop'),
                 size: m.fileSize ? `${(m.fileSize / 1024 / 1024).toFixed(1)} MB` : '0.5 MB',
                 rating: m.rating || 0,
                 downloads: m.downloads || 0

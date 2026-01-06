@@ -146,7 +146,11 @@ export default function MyProfileScreen() {
                     </View>
 
                     {/* Dorm Wallet Card */}
-                    <View style={[styles.walletCard, { backgroundColor: colors.primary }]}>
+                    <TouchableOpacity
+                        style={[styles.walletCard, { backgroundColor: colors.primary }]}
+                        activeOpacity={0.9}
+                        onPress={() => router.push('/wallet')}
+                    >
                         <View style={styles.walletHeader}>
                             <View>
                                 <Text style={styles.walletLabel}>Dorm Wallet</Text>
@@ -169,6 +173,9 @@ export default function MyProfileScreen() {
                             <TouchableOpacity style={styles.walletActionBtn} onPress={handleTopUp}>
                                 <Text style={styles.walletActionText}>Top Up</Text>
                             </TouchableOpacity>
+                            <TouchableOpacity style={styles.walletActionBtn} onPress={() => router.push('/wallet/send-money')}>
+                                <Text style={styles.walletActionText}>Transfer</Text>
+                            </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.walletActionBtn, { backgroundColor: 'rgba(255,255,255,0.2)' }]}
                                 onPress={handleWithdraw}
@@ -176,7 +183,7 @@ export default function MyProfileScreen() {
                                 <Text style={[styles.walletActionText, { color: '#fff' }]}>Withdraw</Text>
                             </TouchableOpacity>
                         </View>
-                    </View>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Content Tabs */}
@@ -215,17 +222,18 @@ export default function MyProfileScreen() {
                         )}
                     </View>
                 </View>
-            </ScrollView>
+            </ScrollView >
 
             {/* Edit Profile Modal Removed */}
 
-            <WalletTransactionModal
+            < WalletTransactionModal
                 visible={transactionModalVisible}
-                onClose={() => setTransactionModalVisible(false)}
+                onClose={() => setTransactionModalVisible(false)
+                }
                 type={transactionType}
                 onSuccess={onTransactionSuccess}
             />
-        </View>
+        </View >
     );
 }
 

@@ -26,19 +26,30 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState<any[]>([]);
   const [stats, setStats] = useState({ elections: 0, orders: 0, notifications: 0, messages: 0 });
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const fetchData = React.useCallback(async (isInitial = false) => {
+  const fetchData = React.useCallback(async (isInitial = false, pageNum = 1) => {
     if (isInitial) setIsLoading(true);
+    if (pageNum > 1) setIsLoadingMore(true);
     try {
       const [postsRes, notifRes, ordersRes, electionsRes, messagesRes] = await Promise.all([
-        postAPI.getFeed(),
+        postAPI.getFeed(pageNum),
         notificationAPI.getNotifications(),
         orderAPI.getOrders(),
         electionAPI.getElections(),
         chatAPI.getUnreadCount()
       ]);
 
-      setPosts(postsRes.data.posts);
+      if (pageNum === 1) {
+        setPosts(postsRes.data.posts);
+      } else {
+        setPosts(prev => [...prev, ...postsRes.data.posts]);
+      }
+
+      setTotalPages(postsRes.data.totalPages);
+      setPage(postsRes.data.currentPage);
       setStats({
         notifications: notifRes.data.filter((n: any) => !n.isRead).length,
         orders: ordersRes.data.filter((o: any) => o.status !== 'delivered').length,
@@ -48,7 +59,8 @@ export default function FeedScreen() {
     } catch (error) {
       console.log('Error fetching feed data:', error);
     } finally {
-      if (isInitial) setIsLoading(false);
+      setIsLoading(false);
+      setIsLoadingMore(false);
     }
   }, []);
 
@@ -89,9 +101,16 @@ export default function FeedScreen() {
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
-    await fetchData();
+    setPage(1);
+    await fetchData(false, 1);
     setRefreshing(false);
   }, [fetchData]);
+
+  const loadMore = () => {
+    if (!isLoadingMore && page < totalPages) {
+      fetchData(false, page + 1);
+    }
+  };
 
   const filteredPosts = posts.filter(post => {
     if (activeTab === 'My') {
@@ -206,6 +225,15 @@ export default function FeedScreen() {
         }
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={styles.footerLoader}>
+              <PostSkeleton />
+            </View>
+          ) : null
         }
       />
 
@@ -381,5 +409,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 16,
+  },
+  footerLoader: {
+    paddingBottom: 20,
   },
 });

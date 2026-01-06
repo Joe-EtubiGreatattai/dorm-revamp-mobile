@@ -2,12 +2,13 @@ import CustomLoader from '@/components/CustomLoader';
 import PostCard from '@/components/PostCard';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
 import { authAPI, chatAPI, postAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -17,7 +18,8 @@ export default function UserProfileScreen() {
     const insets = useSafeAreaInsets();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
-    const { user: currentUser } = useAuth();
+    const { user: currentUser, refreshUser } = useAuth();
+    const { showAlert } = useAlert();
 
     const [user, setUser] = React.useState<any>(null);
     const [userPosts, setUserPosts] = React.useState<any[]>([]);
@@ -25,6 +27,14 @@ export default function UserProfileScreen() {
     const [isFollowing, setIsFollowing] = React.useState(false);
     const [followLoading, setFollowLoading] = React.useState(false);
     const [chatLoading, setChatLoading] = React.useState(false);
+    const [isBlocked, setIsBlocked] = useState(false);
+    const [blockLoading, setBlockLoading] = useState(false);
+
+    React.useEffect(() => {
+        if (currentUser && currentUser.blockedUsers) {
+            setIsBlocked(currentUser.blockedUsers.includes(id as string));
+        }
+    }, [currentUser, id]);
 
     React.useEffect(() => {
         const fetchData = async () => {
@@ -107,6 +117,33 @@ export default function UserProfileScreen() {
         }
     };
 
+    const handleBlock = async () => {
+        showAlert({
+            title: isBlocked ? "Unblock User" : "Block User",
+            description: isBlocked ? "Are you sure you want to unblock this user?" : "Are you sure you want to block this user? You will no longer see their content.",
+            type: isBlocked ? 'info' : 'error',
+            showCancel: true,
+            buttonText: isBlocked ? "Unblock" : "Block",
+            onConfirm: async () => {
+                setBlockLoading(true);
+                try {
+                    if (isBlocked) {
+                        await authAPI.unblockUser(id as string);
+                        setIsBlocked(false);
+                    } else {
+                        await authAPI.blockUser(id as string);
+                        setIsBlocked(true);
+                    }
+                    await refreshUser();
+                } catch (error) {
+                    console.log('Error blocking/unblocking user:', error);
+                } finally {
+                    setBlockLoading(false);
+                }
+            }
+        });
+    };
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             <Stack.Screen options={{ headerShown: false }} />
@@ -118,12 +155,14 @@ export default function UserProfileScreen() {
                         <Ionicons name="arrow-back" size={24} color={colors.text} />
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, { color: colors.text }]}>{user.name}</Text>
-                    {id === 'u1' ? (
+                    {id === currentUser?._id ? (
                         <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/settings')}>
                             <Ionicons name="settings-outline" size={24} color={colors.text} />
                         </TouchableOpacity>
                     ) : (
-                        <View style={{ width: 40 }} />
+                        <TouchableOpacity style={styles.backBtn} onPress={handleBlock}>
+                            <Ionicons name="ellipsis-vertical" size={24} color={colors.text} />
+                        </TouchableOpacity>
                     )}
                 </View>
             </View>

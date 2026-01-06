@@ -7,6 +7,8 @@ import React from 'react';
 import { Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
+import { useAlert } from '@/context/AlertContext';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { Share } from 'react-native';
 
@@ -50,6 +52,7 @@ interface PostProps {
 
 export default function PostCard({ post }: { post: PostProps }) {
     const { user: currentUser } = useAuth();
+    const { showAlert } = useAlert();
     const router = useRouter();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
@@ -62,6 +65,7 @@ export default function PostCard({ post }: { post: PostProps }) {
     const [sharesCount, setSharesCount] = React.useState(post.shares || 0);
     const [bookmarked, setBookmarked] = React.useState(post.savedBy?.includes(currentUser?._id || '') || false);
     const [isMenuVisible, setMenuVisible] = React.useState(false);
+    const [isVisible, setIsVisible] = React.useState(true);
 
     // Sync state with props for real-time updates from parent
     React.useEffect(() => {
@@ -132,6 +136,52 @@ export default function PostCard({ post }: { post: PostProps }) {
         router.push(`/post/${post._id}`);
     };
 
+    const handleCopyLink = async () => {
+        setMenuVisible(false);
+        // In a real app, this would be a deep link URL
+        const postUrl = `https://dorm.app/post/${post._id}`;
+        await Clipboard.setStringAsync(postUrl);
+        showAlert({
+            title: 'Link Copied',
+            description: 'Post link has been copied to your clipboard.',
+            type: 'success'
+        });
+    };
+
+    const handleNotInterested = async () => {
+        setMenuVisible(false);
+        setIsVisible(false); // Optimistic hide
+        try {
+            await postAPI.notInterested(post._id);
+        } catch (error) {
+            console.log('Error marking as not interested:', error);
+            setIsVisible(true);
+        }
+    };
+
+    const handleReport = async () => {
+        setMenuVisible(false);
+        showAlert({
+            title: 'Report Post',
+            description: 'Are you sure you want to report this post for inappropriate content?',
+            type: 'error',
+            showCancel: true,
+            buttonText: 'Report',
+            onConfirm: async () => {
+                try {
+                    await postAPI.reportPost(post._id, 'Inappropriate content');
+                    showAlert({
+                        title: 'Report Submitted',
+                        description: 'Thank you for keeping our community safe. We will review this post.',
+                        type: 'success'
+                    });
+                } catch (error) {
+                    console.log('Error reporting post:', error);
+                }
+            }
+        });
+    };
+
     const handleProfilePress = (e: any) => {
         e.stopPropagation();
         if (post.user?._id) {
@@ -142,6 +192,8 @@ export default function PostCard({ post }: { post: PostProps }) {
             }
         }
     };
+
+    if (!isVisible) return null;
 
     return (
         <TouchableOpacity
@@ -178,17 +230,17 @@ export default function PostCard({ post }: { post: PostProps }) {
                         onPress={() => setMenuVisible(false)}
                     >
                         <View style={[styles.menuContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                            <TouchableOpacity style={styles.menuItem} onPress={handleCopyLink}>
                                 <Ionicons name="link-outline" size={20} color={colors.text} />
                                 <Text style={[styles.menuText, { color: colors.text }]}>Copy Link</Text>
                             </TouchableOpacity>
                             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-                            <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                            <TouchableOpacity style={styles.menuItem} onPress={handleNotInterested}>
                                 <Ionicons name="eye-off-outline" size={20} color={colors.text} />
                                 <Text style={[styles.menuText, { color: colors.text }]}>Not interested</Text>
                             </TouchableOpacity>
                             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-                            <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                            <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
                                 <Ionicons name="flag-outline" size={20} color={colors.error} />
                                 <Text style={[styles.menuText, { color: colors.error }]}>Report Post</Text>
                             </TouchableOpacity>

@@ -82,7 +82,7 @@ export const authAPI = {
 
     resetPassword: (data: any) => apiClient.post('/auth/reset-password', data),
 
-    verifyEmail: (token: string) => apiClient.post('/auth/verify-email', { token }),
+    verifyEmail: (token: string, email?: string) => apiClient.post('/auth/verify-email', { token, email }),
 
     resendCode: (email: string) => apiClient.post('/auth/resend-code', { email }),
 
@@ -94,6 +94,16 @@ export const authAPI = {
     followUser: (userId: string) => apiClient.post(`/auth/users/${userId}/follow`),
 
     unfollowUser: (userId: string) => apiClient.post(`/auth/users/${userId}/unfollow`),
+
+    searchUsers: (query: string) => apiClient.get('/auth/search', { params: { query } }),
+
+    blockUser: (userId: string) => apiClient.post(`/auth/users/${userId}/block`),
+
+    unblockUser: (id: string) => apiClient.post(`/auth/users/${id}/unblock`),
+
+    getBlockedUsers: () => apiClient.get('/auth/blocked'),
+
+    deleteAccount: () => apiClient.delete('/auth/me'),
 
     // Utils
     uploadImage: async (fileUri: string) => {
@@ -132,14 +142,23 @@ export const walletAPI = {
     }) =>
         apiClient.post('/wallet/withdraw', data),
 
-    getTransactions: () =>
-        apiClient.get('/wallet/transactions'),
+    transfer: (data: { recipientId: string; amount: number; description: string }) =>
+        apiClient.post('/wallet/transfer', data),
+
+    getTransactions: (page = 1, limit = 20) =>
+        apiClient.get(`/wallet/transactions?page=${page}&limit=${limit}`),
 
     initializePayment: (amount: number, email?: string) =>
         apiClient.post('/wallet/initialize', { amount, email }),
 
     verifyPayment: (reference: string) =>
         apiClient.post('/wallet/verify', { reference }),
+
+    acceptTransfer: (id: string) =>
+        apiClient.post(`/wallet/transfer/${id}/accept`),
+
+    rejectTransfer: (id: string) =>
+        apiClient.post(`/wallet/transfer/${id}/reject`),
 };
 
 // ============ POST ENDPOINTS ============
@@ -172,6 +191,12 @@ export const postAPI = {
 
     bookmarkPost: (id: string) =>
         apiClient.post(`/posts/${id}/bookmark`),
+
+    reportPost: (id: string, reason: string) =>
+        apiClient.post(`/posts/${id}/report`, { reason }),
+
+    notInterested: (id: string) =>
+        apiClient.post(`/posts/${id}/not-interested`),
 };
 
 // ============ COMMENT ENDPOINTS ============
@@ -403,6 +428,35 @@ export const chatAPI = {
     sendMessage: (conversationId: string, content: string) => apiClient.post(`/chat/conversations/${conversationId}/messages`, { content }),
     createConversation: (recipientId: string) => apiClient.post('/chat/conversations', { recipientId }),
     getUnreadCount: () => apiClient.get('/chat/unread-count'),
+};
+
+// ============ SUPPORT/BUG ENDPOINTS ============
+export const bugAPI = {
+    reportBug: (data: { description: string; attachments?: string[] }) =>
+        apiClient.post('/bugs', data),
+
+    getReports: (page = 1, limit = 20, status?: string) =>
+        apiClient.get('/bugs', { params: { page, limit, status } }),
+
+    updateReport: (id: string, data: { status?: string; priority?: string; adminNotes?: string }) =>
+        apiClient.put(`/bugs/${id}`, data),
+};
+
+// ============ SUPPORT ENDPOINTS ============
+export const supportAPI = {
+    getFAQs: () => apiClient.get('/support/faqs'),
+
+    getTickets: (status?: string) => apiClient.get('/support/tickets', { params: { status } }),
+
+    createTicket: (data: { subject: string; message: string }) =>
+        apiClient.post('/support/tickets', data),
+
+    getTicket: (id: string) => apiClient.get(`/support/tickets/${id}`),
+
+    sendMessage: (id: string, data: { content: string; attachment?: string }) =>
+        apiClient.post(`/support/tickets/${id}/message`, data),
+
+    closeTicket: (id: string) => apiClient.put(`/support/tickets/${id}/close`),
 };
 
 export default apiClient;

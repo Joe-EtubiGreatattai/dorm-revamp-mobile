@@ -1,5 +1,7 @@
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useAuth } from '@/context/AuthContext';
+import { authAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -11,9 +13,33 @@ export default function PrivacySettings() {
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
 
-    const [appLock, setAppLock] = useState(false);
-    const [onlineStatus, setOnlineStatus] = useState(true);
-    const [readReceipts, setReadReceipts] = useState(true);
+    const { user, refreshUser } = useAuth();
+    const settings = user?.privacySettings || {
+        appLock: false,
+        onlineStatus: true,
+        readReceipts: true
+    };
+
+    const [appLock, setAppLock] = useState(settings.appLock);
+    const [onlineStatus, setOnlineStatus] = useState(settings.onlineStatus);
+    const [readReceipts, setReadReceipts] = useState(settings.readReceipts);
+
+    const updatePrivacySetting = async (key: string, value: boolean) => {
+        try {
+            // Update UI immediately
+            if (key === 'appLock') setAppLock(value);
+            if (key === 'onlineStatus') setOnlineStatus(value);
+            if (key === 'readReceipts') setReadReceipts(value);
+
+            await authAPI.updateProfile({
+                privacySettings: { [key]: value }
+            });
+
+            // refreshUser();
+        } catch (error) {
+            console.error('Failed to update privacy setting:', error);
+        }
+    };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -38,7 +64,7 @@ export default function PrivacySettings() {
                         </View>
                         <Switch
                             value={appLock}
-                            onValueChange={setAppLock}
+                            onValueChange={(val) => updatePrivacySetting('appLock', val)}
                             trackColor={{ false: colors.border, true: colors.primary }}
                         />
                     </View>
@@ -53,7 +79,7 @@ export default function PrivacySettings() {
                         </View>
                         <Switch
                             value={onlineStatus}
-                            onValueChange={setOnlineStatus}
+                            onValueChange={(val) => updatePrivacySetting('onlineStatus', val)}
                             trackColor={{ false: colors.border, true: colors.primary }}
                         />
                     </View>
@@ -63,7 +89,7 @@ export default function PrivacySettings() {
                         </View>
                         <Switch
                             value={readReceipts}
-                            onValueChange={setReadReceipts}
+                            onValueChange={(val) => updatePrivacySetting('readReceipts', val)}
                             trackColor={{ false: colors.border, true: colors.primary }}
                         />
                     </View>
@@ -71,16 +97,15 @@ export default function PrivacySettings() {
 
                 <Text style={[styles.sectionTitle, { color: colors.subtext }]}>Data</Text>
                 <View style={[styles.section, { backgroundColor: colors.card }]}>
-                    <TouchableOpacity style={[styles.actionRow, { borderBottomWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }]}>
+                    <TouchableOpacity
+                        onPress={() => router.push('/settings/blocked')}
+                        style={styles.actionRow}
+                    >
                         <Text style={[styles.label, { color: colors.text }]}>Blocked Users</Text>
                         <View style={styles.badge}>
-                            <Text style={[styles.badgeText, { color: colors.subtext }]}>3</Text>
+                            <Text style={[styles.badgeText, { color: colors.subtext }]}>{user?.blockedUsers?.length || 0}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionRow}>
-                        <Text style={[styles.label, { color: colors.text }]}>Request Account Data</Text>
-                        <Ionicons name="download-outline" size={20} color={colors.primary} />
                     </TouchableOpacity>
                 </View>
 

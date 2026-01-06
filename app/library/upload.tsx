@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function UploadMaterial() {
@@ -16,6 +16,7 @@ export default function UploadMaterial() {
 
     const [step, setStep] = useState(1); // 1: Select, 2: Details, 3: Success
     const [file, setFile] = useState<any>(null);
+    const [coverPhoto, setCoverPhoto] = useState<any>(null);
     const [isScanning, setIsScanning] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [isSuccessModalVisible, setSuccessModalVisible] = useState(false);
@@ -57,7 +58,7 @@ export default function UploadMaterial() {
     const handleFileSelect = async () => {
         try {
             const result = await DocumentPicker.getDocumentAsync({
-                type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/*'],
+                type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
                 copyToCacheDirectory: true,
             });
 
@@ -73,6 +74,26 @@ export default function UploadMaterial() {
             });
         } catch (err) {
             console.log('Error selecting file:', err);
+        }
+    };
+
+    const handleCoverSelect = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['image/*'],
+                copyToCacheDirectory: true,
+            });
+
+            if (result.canceled) return;
+
+            const asset = result.assets[0];
+            setCoverPhoto({
+                name: asset.name,
+                uri: asset.uri,
+                mimeType: asset.mimeType
+            });
+        } catch (err) {
+            console.log('Error selecting cover photo:', err);
         }
     };
 
@@ -99,6 +120,14 @@ export default function UploadMaterial() {
                     name: file.name,
                     type: file.mimeType || 'application/octet-stream'
                 } as any);
+
+                if (coverPhoto) {
+                    formData.append('coverPhoto', {
+                        uri: coverPhoto.uri,
+                        name: coverPhoto.name,
+                        type: coverPhoto.mimeType || 'image/jpeg'
+                    } as any);
+                }
 
                 console.log('Starting API upload call...');
                 const response = await libraryAPI.uploadMaterial(formData);
@@ -148,8 +177,31 @@ export default function UploadMaterial() {
                             <Ionicons name="cloud-upload" size={32} color={colors.primary} />
                         </View>
                         <Text style={[styles.uploadPrompt, { color: colors.text }]}>Tap to select a file</Text>
-                        <Text style={[styles.uploadFormats, { color: colors.subtext }]}>PDF, DOCX, IMG (Max 25MB)</Text>
+                        <Text style={[styles.uploadFormats, { color: colors.subtext }]}>PDF, DOCX (Max 25MB)</Text>
                     </>
+                )}
+            </TouchableOpacity>
+
+            <Text style={[styles.label, { color: colors.text, marginTop: 16 }]}>Cover Photo (Optional)</Text>
+            <TouchableOpacity
+                style={[styles.coverUploadBox, { borderColor: colors.border, backgroundColor: colors.card }]}
+                onPress={handleCoverSelect}
+            >
+                {coverPhoto ? (
+                    <View style={styles.coverPreviewContainer}>
+                        <Image source={{ uri: coverPhoto.uri }} style={styles.coverPreviewImage} />
+                        <View style={styles.coverPreviewInfo}>
+                            <Text numberOfLines={1} style={[styles.fileName, { color: colors.text, marginTop: 0 }]}>{coverPhoto.name}</Text>
+                            <TouchableOpacity onPress={(e) => { e.stopPropagation(); setCoverPhoto(null); }}>
+                                <Text style={[styles.removeFile, { color: colors.error }]}>Remove</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <Ionicons name="camera-outline" size={24} color={colors.subtext} />
+                        <Text style={{ color: colors.subtext, fontFamily: 'PlusJakartaSans_500Medium' }}>Select a cover photo</Text>
+                    </View>
                 )}
             </TouchableOpacity>
 
@@ -406,6 +458,35 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 32,
+    },
+    coverUploadBox: {
+        width: '100%',
+        height: 60,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 8,
+        marginBottom: 32,
+        overflow: 'hidden',
+    },
+    coverPreviewContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        width: '100%',
+        gap: 12,
+    },
+    coverPreviewImage: {
+        width: 40,
+        height: 50,
+        borderRadius: 4,
+        backgroundColor: '#eee',
+    },
+    coverPreviewInfo: {
+        flex: 1,
+        justifyContent: 'center',
     },
     iconCircle: {
         width: 64,

@@ -1,9 +1,14 @@
+const PORT = '5001';
 
-// Production URL
-const PRODUCTION_URL = 'https://dorm-revamp-backend.onrender.com';
+// Production URL (Render)
+const PROD_URL = 'https://dorm-revamp-backend.onrender.com';
 
-export const API_URL = `${PRODUCTION_URL}/api`;
-export const SOCKET_URL = PRODUCTION_URL;
+// Local IP (For development)
+// const LOCAL_IP = '192.168.0.130';
+
+// Use production URL
+export const API_URL = `${PROD_URL}/api`;
+export const SOCKET_URL = PROD_URL;
 export const PAYSTACK_PUBLIC_KEY = 'pk_test_a15103affe18985815a036f9092bc2ffe442b3d5';
 
 console.log('API_URL Configured:', API_URL);

@@ -1,6 +1,7 @@
 import CustomLoader from '@/components/CustomLoader';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
 import { useCall } from '@/context/CallContext';
 import { chatAPI } from '@/utils/apiClient';
@@ -50,6 +51,7 @@ export default function ChatScreen() {
 
     const { user: currentUser } = useAuth();
     const { startCall } = useCall();
+    const { showAlert } = useAlert();
 
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
@@ -276,11 +278,16 @@ export default function ChatScreen() {
             const response = await chatAPI.sendMessage(targetId, optimisiticMessage.content);
             console.log('✅ [ChatScreen] Message sent successfully:', response.data);
             // Real message will replace optimistic one via socket
-        } catch (error) {
+        } catch (error: any) {
             console.log('Error sending message:', error);
             // Remove optimistic message on error
             setMessages(prev => prev.filter(m => m.id !== optimisiticMessage.id));
-            alert('Failed to send message. Please try again.');
+            const errorMessage = error.response?.data?.message || 'Failed to send message. Please try again.';
+            showAlert({
+                title: 'Message Error',
+                description: errorMessage,
+                type: 'error'
+            });
         }
     };
 

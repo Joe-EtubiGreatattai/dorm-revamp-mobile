@@ -4,7 +4,7 @@ import { useHaptics } from '@/context/HapticsContext';
 import { useThemeHandlers } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,7 +15,7 @@ export default function AppPreferences() {
     const { setTheme, themePreference } = useThemeHandlers();
     const { hapticsEnabled, setHapticsEnabled, triggerHaptic } = useHaptics();
 
-    const [language, setLanguage] = useState('English');
+
 
     const renderOption = (label: string, value: string, selected: boolean, onSelect: () => void) => (
         <TouchableOpacity
@@ -52,14 +52,7 @@ export default function AppPreferences() {
                     </View>
                 </View>
 
-                <Text style={[styles.sectionTitle, { color: colors.subtext, marginTop: 24 }]}>Language & Region</Text>
-                <View style={[styles.section, { backgroundColor: colors.card }]}>
-                    {renderOption('English', 'English', language === 'English', () => setLanguage('English'))}
-                    {renderOption('Pidgin English', 'Pidgin', language === 'Pidgin', () => setLanguage('Pidgin'))}
-                    {renderOption('Yoruba', 'Yoruba', language === 'Yoruba', () => setLanguage('Yoruba'))}
-                    {renderOption('Igbo', 'Igbo', language === 'Igbo', () => setLanguage('Igbo'))}
-                    {renderOption('Hausa', 'Hausa', language === 'Hausa', () => setLanguage('Hausa'))}
-                </View>
+
 
                 <Text style={[styles.sectionTitle, { color: colors.subtext, marginTop: 24 }]}>Interaction</Text>
                 <View style={[styles.section, { backgroundColor: colors.card }]}>

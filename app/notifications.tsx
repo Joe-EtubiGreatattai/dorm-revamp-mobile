@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     FlatList,
     RefreshControl,
     StyleSheet,
@@ -17,16 +18,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 type FilterType = 'All' | 'Likes' | 'Mentions';
 
-import { notificationAPI } from '@/utils/apiClient';
+import { useAlert } from '@/context/AlertContext';
+import { notificationAPI, walletAPI } from '@/utils/apiClient';
 // ... imports
 
 export default function NotificationsScreen() {
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
+    const { showAlert } = useAlert(); // Access alert context
     const [activeFilter, setActiveFilter] = useState<FilterType>('All');
     const [refreshing, setRefreshing] = useState(false);
     const [notifications, setNotifications] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    const [loadingId, setLoadingId] = useState<string | null>(null);
 
     const fetchNotifications = React.useCallback(async () => {
         try {
@@ -49,7 +54,11 @@ export default function NotificationsScreen() {
         if (socket) {
             socket.on('notification:new', (newNotification: any) => {
                 console.log('🔔 [NOTIFICATIONS] New notification received via socket:', newNotification);
-                setNotifications(prev => [newNotification, ...prev]);
+                setNotifications(prev => {
+                    // Prevent duplicates
+                    if (prev.some(n => n._id === newNotification._id)) return prev;
+                    return [newNotification, ...prev];
+                });
             });
 
             return () => {
@@ -69,6 +78,45 @@ export default function NotificationsScreen() {
             fetchNotifications();
         } catch (error) {
             console.log('Error marking all as read:', error);
+        }
+    };
+
+    const handleAcceptTransfer = async (notification: any) => {
+        if (loadingId) return;
+        setLoadingId(notification._id);
+        try {
+            await walletAPI.acceptTransfer(notification.relatedId);
+            showAlert({ title: 'Success', description: 'Transfer accepted successfully!', type: 'success' });
+            // Mark notification as read and update type to prevent re-action
+            await notificationAPI.markAsRead(notification._id);
+            fetchNotifications();
+        } catch (error: any) {
+            showAlert({
+                title: 'Error',
+                description: error.response?.data?.message || 'Failed to accept transfer',
+                type: 'error'
+            });
+        } finally {
+            setLoadingId(null);
+        }
+    };
+
+    const handleRejectTransfer = async (notification: any) => {
+        if (loadingId) return;
+        setLoadingId(notification._id);
+        try {
+            await walletAPI.rejectTransfer(notification.relatedId);
+            showAlert({ title: 'Rejected', description: 'Transfer rejected.', type: 'success' });
+            await notificationAPI.markAsRead(notification._id);
+            fetchNotifications();
+        } catch (error: any) {
+            showAlert({
+                title: 'Error',
+                description: error.response?.data?.message || 'Failed to reject transfer',
+                type: 'error'
+            });
+        } finally {
+            setLoadingId(null);
         }
     };
 
@@ -96,6 +144,14 @@ export default function NotificationsScreen() {
                 router.push({ pathname: '/user/[id]', params: { id: notification.relatedId } });
                 break;
             case 'system':
+                if (notification.title === 'Bug Report Update') {
+                    showAlert({
+                        title: notification.title,
+                        description: notification.content || notification.message,
+                        type: 'info'
+                    });
+                    break;
+                }
                 if (notification.relatedId) {
                     router.push({ pathname: '/listing/[id]', params: { id: notification.relatedId } });
                 }
@@ -114,6 +170,13 @@ export default function NotificationsScreen() {
                 } else {
                     router.push({ pathname: '/housing/tour-detail/[id]', params: { id: notification.relatedId } });
                 }
+                break;
+            case 'payment_request':
+                // No specific navigation, actions are inline
+                break;
+            case 'payment_accepted':
+            case 'payment_rejected':
+                // Maybe navigate to wallet history
                 break;
             default:
                 break;
@@ -134,6 +197,9 @@ export default function NotificationsScreen() {
             case 'system': return { name: 'shield-checkmark', color: '#10b981' };
             case 'tour': return { name: 'home', color: colors.primary };
             case 'order': return { name: 'receipt', color: colors.primary };
+            case 'payment_request': return { name: 'cash-outline', color: '#f59e0b' }; // Orange for request
+            case 'payment_accepted': return { name: 'checkmark-circle-outline', color: '#10b981' }; // Green
+            case 'payment_rejected': return { name: 'close-circle-outline', color: '#ef4444' }; // Red
             default: return { name: 'notifications', color: colors.subtext };
         }
     };
@@ -174,6 +240,35 @@ export default function NotificationsScreen() {
                     <Text style={[styles.timestamp, { color: colors.subtext }]}>
                         {new Date(item.createdAt || item.timestamp).toLocaleDateString()}
                     </Text>
+
+                    {item.type === 'payment_request' && !item.isActioned && (
+                        <View style={styles.actionButtons}>
+                            <TouchableOpacity
+                                style={[styles.actionBtn, { backgroundColor: '#10b981' }]}
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    handleAcceptTransfer(item);
+                                }}
+                                disabled={!!loadingId}
+                            >
+                                {loadingId === item._id ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Text style={styles.actionBtnText}>Accept</Text>
+                                )}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.actionBtn, { backgroundColor: '#ef4444' }]}
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    handleRejectTransfer(item);
+                                }}
+                                disabled={!!loadingId}
+                            >
+                                <Text style={styles.actionBtnText}>Reject</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
 
                 {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />}
@@ -215,7 +310,7 @@ export default function NotificationsScreen() {
 
             <FlatList
                 data={filteredNotifications}
-                keyExtractor={(item) => item._id || item.id}
+                keyExtractor={(item, index) => item._id?.toString() || item.id?.toString() || index.toString()}
                 renderItem={renderNotification}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
@@ -351,5 +446,20 @@ const styles = StyleSheet.create({
     emptyText: {
         fontFamily: 'PlusJakartaSans_600SemiBold',
         fontSize: 16,
+    },
+    actionButtons: {
+        flexDirection: 'row',
+        marginTop: 12,
+        gap: 12,
+    },
+    actionBtn: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    actionBtnText: {
+        color: '#fff',
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 12,
     },
 });

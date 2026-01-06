@@ -23,11 +23,12 @@ export default function NotificationSettings() {
     const [replies, setReplies] = useState(settings.comments ?? true);
     const [followers, setFollowers] = useState(settings.follows ?? true);
     const [messages, setMessages] = useState(settings.messages ?? true);
+    const [shares, setShares] = useState(settings.shares ?? true);
 
     // UI Only (not in backend model yet)
-    const [priceAlerts, setPriceAlerts] = useState(true);
-    const [orderUpdates, setOrderUpdates] = useState(true);
-    const [electionReminders, setElectionReminders] = useState(true);
+    const [priceAlerts, setPriceAlerts] = useState(settings.priceAlerts ?? true);
+    const [orderUpdates, setOrderUpdates] = useState(settings.orderUpdates ?? true);
+    const [electionReminders, setElectionReminders] = useState(settings.electionReminders ?? true);
 
     const updateSetting = async (key: string, value: boolean) => {
         try {
@@ -36,6 +37,10 @@ export default function NotificationSettings() {
             if (key === 'comments') setReplies(value);
             if (key === 'follows') setFollowers(value);
             if (key === 'messages') setMessages(value);
+            if (key === 'shares') setShares(value);
+            if (key === 'priceAlerts') setPriceAlerts(value);
+            if (key === 'orderUpdates') setOrderUpdates(value);
+            if (key === 'electionReminders') setElectionReminders(value);
 
             // Debounce or fire and forget? Let's just fire.
             await authAPI.updateProfile({
@@ -88,20 +93,21 @@ export default function NotificationSettings() {
                     {renderToggle('Mentions', mentions, (val) => updateSetting('mentions', val))}
                     {renderToggle('Replies', replies, (val) => updateSetting('comments', val))}
                     {renderToggle('New Followers', followers, (val) => updateSetting('follows', val))}
+                    {renderToggle('Shares', shares, (val) => updateSetting('shares', val))}
                 </View>
 
                 {/* Marketplace */}
                 <Text style={[styles.sectionTitle, { color: colors.subtext }]}>Marketplace</Text>
                 <View style={[styles.card, { backgroundColor: colors.card, marginBottom: 24 }]}>
-                    {renderToggle('Price Alerts', priceAlerts, setPriceAlerts)}
-                    {renderToggle('Order Updates', orderUpdates, setOrderUpdates)}
+                    {renderToggle('Price Alerts', priceAlerts, (val) => updateSetting('priceAlerts', val))}
+                    {renderToggle('Order Updates', orderUpdates, (val) => updateSetting('orderUpdates', val))}
                     {renderToggle('Direct Messages', messages, (val) => updateSetting('messages', val))}
                 </View>
 
                 {/* Elections */}
                 <Text style={[styles.sectionTitle, { color: colors.subtext }]}>Elections</Text>
                 <View style={[styles.card, { backgroundColor: colors.card }]}>
-                    {renderToggle('Voting Reminders', electionReminders, setElectionReminders)}
+                    {renderToggle('Voting Reminders', electionReminders, (val) => updateSetting('electionReminders', val))}
                 </View>
 
             </ScrollView>
