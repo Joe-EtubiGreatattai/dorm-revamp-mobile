@@ -181,7 +181,9 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
         pc.ontrack = (event: any) => {
             console.log('📞 [CallContext] Received remote track:', event.track.kind);
             if (event.streams && event.streams[0]) {
-                setRemoteStream(event.streams[0]);
+                const stream = event.streams[0];
+                console.log('📞 [CallContext] Remote stream attached:', stream.id);
+                setRemoteStream(stream);
             }
         };
 

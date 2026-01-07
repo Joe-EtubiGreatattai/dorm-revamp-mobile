@@ -1,5 +1,6 @@
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useCall } from '@/context/CallContext';
 // import { USERS } from '@/constants/mockData';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -21,10 +22,10 @@ interface CallModalProps {
 }
 
 export default function CallModal({ visible, onClose, user, status = 'outgoing', onAccept, onDecline, onEnd }: CallModalProps) {
+    const { toggleMute, isMuted, remoteStream } = useCall();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
     const [timer, setTimer] = useState(0);
-    const [isMuted, setIsMuted] = useState(false);
     const [isSpeaker, setIsSpeaker] = useState(false);
     const [isVideo, setIsVideo] = useState(false);
     const [contacts, setContacts] = useState<any[]>([]);
@@ -56,7 +57,7 @@ export default function CallModal({ visible, onClose, user, status = 'outgoing',
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
-        let timerInterval: NodeJS.Timeout;
+        let timerInterval: any;
 
         if (status === 'connected') {
             timerInterval = setInterval(() => {
@@ -183,7 +184,7 @@ export default function CallModal({ visible, onClose, user, status = 'outgoing',
                                     icon={isMuted ? "mic-off" : "mic"}
                                     label="mute"
                                     active={isMuted}
-                                    onPress={() => setIsMuted(!isMuted)}
+                                    onPress={toggleMute}
                                 />
                                 <ControlBtn
                                     icon="keypad"
