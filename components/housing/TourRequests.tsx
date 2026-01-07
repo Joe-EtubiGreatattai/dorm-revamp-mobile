@@ -23,7 +23,6 @@ export default function TourRequests() {
             const { data } = await tourAPI.getTours();
             setRequests(data);
         } catch (error) {
-            console.log('Error fetching tour requests:', error);
         } finally {
             setLoading(false);
         }
@@ -67,7 +66,6 @@ export default function TourRequests() {
                 setRequests(prev => prev.map(r => (r._id || r.id) === id ? { ...r, status: 'declined' } : r));
             }
         } catch (error) {
-            console.log(`Error ${action}ing tour:`, error);
         }
     };
 

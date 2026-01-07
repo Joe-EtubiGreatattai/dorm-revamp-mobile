@@ -11,7 +11,6 @@ export const API_URL = `${PROD_URL}/api`;
 export const SOCKET_URL = PROD_URL;
 export const PAYSTACK_PUBLIC_KEY = 'pk_test_a15103affe18985815a036f9092bc2ffe442b3d5';
 
-console.log('API_URL Configured:', API_URL);
 
 export default {
     API_URL,

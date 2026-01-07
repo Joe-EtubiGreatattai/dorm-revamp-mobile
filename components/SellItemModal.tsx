@@ -110,7 +110,6 @@ export default function SellItemModal({
                 setSelectedImages([...selectedImages, ...newImages].slice(0, 5));
             }
         } catch (error) {
-            console.log('Error picking image:', error);
             showAlert({
                 title: 'Error',
                 description: 'Failed to pick image. Please try again.',
@@ -124,9 +123,6 @@ export default function SellItemModal({
     };
 
     const handleList = async () => {
-        console.log('🛒 [SellItemModal] handleList called');
-        console.log('🛒 [SellItemModal] Form data:', { title, price, description, category, type: initialType });
-        console.log('🛒 [SellItemModal] Selected images:', selectedImages);
 
         if (!title || !price || selectedImages.length === 0) {
             showAlert({
@@ -140,16 +136,11 @@ export default function SellItemModal({
         setLoading(true);
         try {
             // Upload images first
-            console.log('📤 [SellItemModal] Starting image upload...');
             const uploadedImageUrls = await Promise.all(
                 selectedImages.map(async (uri) => {
-                    console.log('📤 [SellItemModal] Uploading:', uri);
-                    const url = await authAPI.uploadImage(uri);
-                    console.log('✅ [SellItemModal] Uploaded:', url);
-                    return url;
+                    return await authAPI.uploadImage(uri);
                 })
             );
-            console.log('✅ [SellItemModal] All images uploaded:', uploadedImageUrls);
 
             const itemData = {
                 title,
@@ -159,15 +150,12 @@ export default function SellItemModal({
                 type: initialData?.type || initialType,
                 images: uploadedImageUrls,
             };
-            console.log('📤 [SellItemModal] Sending item data:', itemData);
 
             let response;
             if (initialData) {
                 response = await marketAPI.updateItem(initialData._id, itemData);
-                console.log('✅ [SellItemModal] Update item response:', response);
             } else {
                 response = await marketAPI.createItem(itemData);
-                console.log('✅ [SellItemModal] Create item response:', response);
             }
 
             setLoading(false);
@@ -181,11 +169,6 @@ export default function SellItemModal({
             });
         } catch (error: any) {
             setLoading(false);
-            console.log('❌ [SellItemModal] Error:', error);
-            if (error.response) {
-                console.log('❌ [SellItemModal] Error Data:', error.response.data);
-                console.log('❌ [SellItemModal] Error Status:', error.response.status);
-            }
             showAlert({
                 title: 'Error',
                 description: error.response?.data?.message || 'Failed to list item. Please try again.',

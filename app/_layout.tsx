@@ -52,11 +52,7 @@ export default function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
+  // Move SplashScreen.hideAsync() to RootLayoutNav to wait for Auth state
 
   if (!loaded) {
     return null;
@@ -69,7 +65,7 @@ export default function RootLayout() {
           <CallProvider>
             <HapticsProvider>
               <AlertProvider>
-                <RootLayoutNav />
+                <RootLayoutNav fontsLoaded={loaded} />
               </AlertProvider>
             </HapticsProvider>
           </CallProvider>
@@ -79,11 +75,17 @@ export default function RootLayout() {
   );
 }
 
-function RootLayoutNav() {
+function RootLayoutNav({ fontsLoaded }: { fontsLoaded: boolean }) {
   const colorScheme = useColorScheme();
   const { user, isLoading, hasSeenOnboarding } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  useEffect(() => {
+    if (fontsLoaded && !isLoading) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, isLoading]);
 
   useEffect(() => {
     if (isLoading) return;

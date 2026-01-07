@@ -19,16 +19,13 @@ export default function MyListings() {
     const fetchMyListings = useCallback(async () => {
         if (!user) return;
 
-        console.log('🏠 [MY LISTINGS] Fetching listings for user:', user._id);
         setLoading(true);
 
         try {
             const { data } = await housingAPI.getListings({ ownerId: user._id });
-            console.log('🏠 [MY LISTINGS] API Response:', data);
 
             // The response structure is data.listings, not data directly
             const allListings = data.listings || data || [];
-            console.log('🏠 [MY LISTINGS] All listings count:', allListings.length);
 
             // Filter by ownerId (compare as strings)
             const myListings = allListings.filter((h: any) =>
@@ -36,7 +33,6 @@ export default function MyListings() {
                 h.ownerId?.toString() === user._id.toString()
             );
 
-            console.log('🏠 [MY LISTINGS] My listings count:', myListings.length);
             setListings(myListings);
         } catch (error) {
             console.error('❌ [MY LISTINGS] Error fetching:', error);

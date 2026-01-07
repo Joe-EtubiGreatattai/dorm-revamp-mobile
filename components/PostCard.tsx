@@ -3,16 +3,16 @@ import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React from 'react';
+import React, { useState } from 'react';
 import { Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { useAlert } from '@/context/AlertContext';
-import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { Share } from 'react-native';
 
 import { postAPI } from '@/utils/apiClient';
+import CreatePostModal from './CreatePostModal';
 
 const { width } = Dimensions.get('window');
 
@@ -66,6 +66,7 @@ export default function PostCard({ post }: { post: PostProps }) {
     const [bookmarked, setBookmarked] = React.useState(post.savedBy?.includes(currentUser?._id || '') || false);
     const [isMenuVisible, setMenuVisible] = React.useState(false);
     const [isVisible, setIsVisible] = React.useState(true);
+    const [isEditModalVisible, setEditModalVisible] = useState(false);
 
     // Sync state with props for real-time updates from parent
     React.useEffect(() => {
@@ -97,7 +98,6 @@ export default function PostCard({ post }: { post: PostProps }) {
         try {
             await postAPI.likePost(post._id);
         } catch (error) {
-            console.log('Error liking post:', error);
             setLiked(prevLiked);
             setLikesCount(prevCount);
         }
@@ -115,7 +115,6 @@ export default function PostCard({ post }: { post: PostProps }) {
                 await postAPI.sharePost(post._id);
             }
         } catch (error) {
-            console.log('Error sharing:', error);
         }
     };
 
@@ -127,7 +126,6 @@ export default function PostCard({ post }: { post: PostProps }) {
         try {
             await postAPI.bookmarkPost(post._id);
         } catch (error) {
-            console.log('Error bookmarking post:', error);
             setBookmarked(prevBookmarked);
         }
     };
@@ -136,17 +134,6 @@ export default function PostCard({ post }: { post: PostProps }) {
         router.push(`/post/${post._id}`);
     };
 
-    const handleCopyLink = async () => {
-        setMenuVisible(false);
-        // In a real app, this would be a deep link URL
-        const postUrl = `https://dorm.app/post/${post._id}`;
-        await Clipboard.setStringAsync(postUrl);
-        showAlert({
-            title: 'Link Copied',
-            description: 'Post link has been copied to your clipboard.',
-            type: 'success'
-        });
-    };
 
     const handleNotInterested = async () => {
         setMenuVisible(false);
@@ -154,7 +141,6 @@ export default function PostCard({ post }: { post: PostProps }) {
         try {
             await postAPI.notInterested(post._id);
         } catch (error) {
-            console.log('Error marking as not interested:', error);
             setIsVisible(true);
         }
     };
@@ -176,10 +162,42 @@ export default function PostCard({ post }: { post: PostProps }) {
                         type: 'success'
                     });
                 } catch (error) {
-                    console.log('Error reporting post:', error);
                 }
             }
         });
+    };
+
+    const handleDelete = async () => {
+        setMenuVisible(false);
+        showAlert({
+            title: 'Delete Post',
+            description: 'Are you sure you want to delete this post? This action cannot be undone.',
+            type: 'error',
+            showCancel: true,
+            buttonText: 'Delete',
+            onConfirm: async () => {
+                try {
+                    await postAPI.deletePost(post._id);
+                    setIsVisible(false);
+                    showAlert({
+                        title: 'Post Deleted',
+                        description: 'Your post has been successfully deleted.',
+                        type: 'success'
+                    });
+                } catch (error) {
+                    showAlert({
+                        title: 'Delete Failed',
+                        description: 'Could not delete post. Please try again.',
+                        type: 'error'
+                    });
+                }
+            }
+        });
+    };
+
+    const handleEdit = () => {
+        setMenuVisible(false);
+        setEditModalVisible(true);
     };
 
     const handleProfilePress = (e: any) => {
@@ -230,20 +248,32 @@ export default function PostCard({ post }: { post: PostProps }) {
                         onPress={() => setMenuVisible(false)}
                     >
                         <View style={[styles.menuContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <TouchableOpacity style={styles.menuItem} onPress={handleCopyLink}>
-                                <Ionicons name="link-outline" size={20} color={colors.text} />
-                                <Text style={[styles.menuText, { color: colors.text }]}>Copy Link</Text>
-                            </TouchableOpacity>
-                            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-                            <TouchableOpacity style={styles.menuItem} onPress={handleNotInterested}>
-                                <Ionicons name="eye-off-outline" size={20} color={colors.text} />
-                                <Text style={[styles.menuText, { color: colors.text }]}>Not interested</Text>
-                            </TouchableOpacity>
-                            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-                            <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
-                                <Ionicons name="flag-outline" size={20} color={colors.error} />
-                                <Text style={[styles.menuText, { color: colors.error }]}>Report Post</Text>
-                            </TouchableOpacity>
+
+                            {currentUser?._id === post.user?._id ? (
+                                <>
+                                    <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+                                        <Ionicons name="create-outline" size={20} color={colors.text} />
+                                        <Text style={[styles.menuText, { color: colors.text }]}>Edit Post</Text>
+                                    </TouchableOpacity>
+                                    <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+                                    <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                                        <Ionicons name="trash-outline" size={20} color={colors.error} />
+                                        <Text style={[styles.menuText, { color: colors.error }]}>Delete Post</Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <>
+                                    <TouchableOpacity style={styles.menuItem} onPress={handleNotInterested}>
+                                        <Ionicons name="eye-off-outline" size={20} color={colors.text} />
+                                        <Text style={[styles.menuText, { color: colors.text }]}>Not interested</Text>
+                                    </TouchableOpacity>
+                                    <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+                                    <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
+                                        <Ionicons name="flag-outline" size={20} color={colors.error} />
+                                        <Text style={[styles.menuText, { color: colors.error }]}>Report Post</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
                         </View>
                     </TouchableOpacity>
                 </Modal>
@@ -302,6 +332,15 @@ export default function PostCard({ post }: { post: PostProps }) {
                     />
                 </TouchableOpacity>
             </View>
+
+            {/* Edit Post Modal */}
+            {currentUser?._id === post.user?._id && (
+                <CreatePostModal
+                    visible={isEditModalVisible}
+                    onClose={() => setEditModalVisible(false)}
+                    post={post}
+                />
+            )}
         </TouchableOpacity>
     );
 }

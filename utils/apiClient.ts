@@ -43,7 +43,6 @@ apiClient.interceptors.response.use(
     (error) => {
         if (error.response?.status === 401) {
             // Handle unauthorized - redirect to login
-            console.log('Unauthorized - please login again');
         }
         return Promise.reject(error);
     }
@@ -177,7 +176,7 @@ export const postAPI = {
             headers: (data && typeof data.append === 'function') ? { 'Content-Type': 'multipart/form-data' } : undefined
         }),
 
-    updatePost: (id: string, data: { content?: string; images?: string[] }) =>
+    updatePost: (id: string, data: { content?: string; images?: string[]; visibility?: string }) =>
         apiClient.put(`/posts/${id}`, data),
 
     deletePost: (id: string) =>

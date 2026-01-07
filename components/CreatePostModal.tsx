@@ -1,7 +1,7 @@
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
-import { postAPI } from '@/utils/apiClient';
+import { authAPI, postAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,15 +20,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function CreatePostModal({ visible, onClose }: { visible: boolean, onClose: () => void }) {
+export default function CreatePostModal({ visible, onClose, post }: { visible: boolean, onClose: () => void, post?: any }) {
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
     const { user } = useAuth();
-    const [content, setContent] = useState('');
-    const [images, setImages] = useState<string[]>([]);
-    const [visibility, setVisibility] = useState<'public' | 'school'>('public');
+    const [content, setContent] = useState(post?.content || '');
+    const [images, setImages] = useState<string[]>(post?.images || []);
+    const [visibility, setVisibility] = useState<'public' | 'school'>(post?.visibility || 'public');
     const [isVisibilityMenuVisible, setVisibilityMenuVisible] = useState(false);
     const [loading, setLoading] = useState(false);
+    const isEditing = !!post;
 
     const maxLength = 280;
     const progress = Math.min(content.length / maxLength, 1);
@@ -58,29 +59,41 @@ export default function CreatePostModal({ visible, onClose }: { visible: boolean
 
         setLoading(true);
         try {
-            const formData = new FormData();
-            formData.append('content', content);
-            formData.append('visibility', visibility);
+            if (isEditing) {
+                // Upload any new images first
+                const uploadedImages = await Promise.all(
+                    images.map(async (img) => {
+                        if (img.startsWith('http')) return img;
+                        return await authAPI.uploadImage(img);
+                    })
+                );
+                await postAPI.updatePost(post._id, { content, visibility, images: uploadedImages });
+            } else {
+                const formData = new FormData();
+                formData.append('content', content);
+                formData.append('visibility', visibility);
 
-            images.forEach((uri, index) => {
-                const filename = uri.split('/').pop() || `image_${index}.jpg`;
-                const match = /\.(\w+)$/.exec(filename);
-                const type = match ? `image/${match[1]}` : `image`;
+                images.forEach((uri, index) => {
+                    const filename = uri.split('/').pop() || `image_${index}.jpg`;
+                    const match = /\.(\w+)$/.exec(filename);
+                    const type = match ? `image/${match[1]}` : `image`;
 
-                // @ts-ignore
-                formData.append('images', {
-                    uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
-                    name: filename,
-                    type,
+                    // @ts-ignore
+                    formData.append('images', {
+                        uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
+                        name: filename,
+                        type,
+                    });
                 });
-            });
 
-            await postAPI.createPost(formData);
-            setContent('');
-            setImages([]);
+                await postAPI.createPost(formData);
+            }
+            if (!isEditing) {
+                setContent('');
+                setImages([]);
+            }
             onClose();
         } catch (error) {
-            console.log('Error creating post:', error);
             alert('Failed to post. Please try again.');
         } finally {
             setLoading(false);
@@ -106,7 +119,7 @@ export default function CreatePostModal({ visible, onClose }: { visible: boolean
                         {loading ? (
                             <ActivityIndicator size="small" color="#fff" />
                         ) : (
-                            <Text style={styles.postBtnText}>Post</Text>
+                            <Text style={styles.postBtnText}>{isEditing ? 'Update' : 'Post'}</Text>
                         )}
                     </TouchableOpacity>
                 </View>
@@ -186,7 +199,7 @@ export default function CreatePostModal({ visible, onClose }: { visible: boolean
 
                                 <TextInput
                                     multiline
-                                    placeholder="What's happening?"
+                                    placeholder={isEditing ? "Edit your post..." : "What's happening?"}
                                     placeholderTextColor={colors.subtext}
                                     style={[styles.input, { color: colors.text }]}
                                     value={content}
@@ -436,6 +449,8 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 8,
+        position: 'absolute',
+        bottom: 0,
     },
     menuItem: {
         flexDirection: 'row',
@@ -458,3 +473,5 @@ const styles = StyleSheet.create({
         marginVertical: 4,
     },
 });
+
+

@@ -42,7 +42,6 @@ export const usePushNotifications = () => {
             }
 
             if (finalStatus !== 'granted') {
-                console.log('Failed to get push token for push notification!');
                 return;
             }
 
@@ -60,18 +59,15 @@ export const usePushNotifications = () => {
                 projectId,
             })).data;
 
-            console.log('Expo Push Token (Client):', token);
 
             // Send to backend
             try {
                 await notificationAPI.registerPushToken(token);
-                console.log('Push token registered with backend');
             } catch (error) {
                 console.error('Error registering push token:', error);
             }
 
         } else {
-            console.log('Must use physical device for Push Notifications');
         }
 
         return token;
