@@ -39,6 +39,7 @@ interface PostProps {
         _id: string;
         name: string;
         avatar: string;
+        monetizationEnabled?: boolean;
     } | null;
     content: string;
     images: string[];
@@ -228,7 +229,12 @@ export default function PostCard({ post }: { post: PostProps }) {
                     />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleProfilePress} activeOpacity={0.7} style={styles.userInfo}>
-                    <Text style={[styles.userName, { color: colors.text }]}>{post.user?.name || 'Deleted User'}</Text>
+                    <View style={styles.nameContainer}>
+                        <Text style={[styles.userName, { color: colors.text }]}>{post.user?.name || 'Deleted User'}</Text>
+                        {post.user?.monetizationEnabled && (
+                            <Ionicons name="checkmark-circle" size={16} color="#10b981" style={styles.monetizedIcon} />
+                        )}
+                    </View>
                     <Text style={[styles.timestamp, { color: colors.subtext }]}>{post.timestamp}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={(e) => { e.stopPropagation(); setMenuVisible(true); }}>
@@ -367,6 +373,14 @@ const styles = StyleSheet.create({
     userName: {
         fontFamily: 'PlusJakartaSans_700Bold',
         fontSize: 16,
+    },
+    nameContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    monetizedIcon: {
+        marginLeft: 2,
     },
     timestamp: {
         fontFamily: 'PlusJakartaSans_400Regular',

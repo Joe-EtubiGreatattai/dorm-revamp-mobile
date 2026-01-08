@@ -96,6 +96,7 @@ export default function SettingsScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.subtext }]}>Account</Text>
                 <View style={[styles.section, { backgroundColor: colors.card }]}>
                     {renderSettingItem('person-outline', 'Personal Information', '/settings/account')}
+                    {renderSettingItem('cash-outline', 'Monetization', '/settings/monetization', '#f59e0b')}
                     {renderSettingItem('shield-checkmark-outline', 'Security & Login', '/settings/security')}
                 </View>
 

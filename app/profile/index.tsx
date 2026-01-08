@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/context/AuthContext';
@@ -23,6 +23,7 @@ export default function MyProfileScreen() {
     const [transactionModalVisible, setTransactionModalVisible] = useState(false);
     const [transactionType, setTransactionType] = useState<'topup' | 'withdraw'>('topup');
     const [isLoading, setIsLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [myPosts, setMyPosts] = useState<any[]>([]);
 
     // Refresh user data on mount to get latest followers/following
@@ -30,21 +31,34 @@ export default function MyProfileScreen() {
         refreshUser();
     }, []);
 
-    React.useEffect(() => {
-        const fetchPosts = async () => {
-            if (user?._id) {
-                try {
-                    setIsLoading(true); // Re-use isLoading for content
-                    const { data } = await postAPI.getUserPosts(user._id, activeTab);
-                    setMyPosts(data);
-                } catch (error) {
-                    console.log('Error fetching user posts:', error);
-                } finally {
-                    setIsLoading(false);
-                }
+    const fetchPosts = async () => {
+        if (user?._id) {
+            try {
+                const { data } = await postAPI.getUserPosts(user._id, activeTab);
+                setMyPosts(data);
+            } catch (error) {
+                console.log('Error fetching user posts:', error);
             }
-        };
-        fetchPosts();
+        }
+    };
+
+    React.useEffect(() => {
+        setIsLoading(true);
+        fetchPosts().finally(() => setIsLoading(false));
+    }, [user, activeTab]);
+
+    const onRefresh = React.useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await Promise.all([
+                refreshUser(),
+                fetchPosts()
+            ]);
+        } catch (error) {
+            console.log('Error refreshing profile:', error);
+        } finally {
+            setRefreshing(false);
+        }
     }, [user, activeTab]);
 
     const handleBack = () => router.back();
@@ -119,7 +133,17 @@ export default function MyProfileScreen() {
                 </View>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        colors={[colors.primary]}
+                        tintColor={colors.primary}
+                    />
+                }
+            >
                 {/* Profile Header Card */}
                 <View style={[styles.profileCard, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                     <View style={styles.profileMain}>

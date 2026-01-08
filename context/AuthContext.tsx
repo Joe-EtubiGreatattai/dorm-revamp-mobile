@@ -38,6 +38,8 @@ type User = {
     }[];
     followers?: string[];
     following?: string[];
+    monetizationEnabled?: boolean;
+    totalMonetizationEarnings?: number;
 };
 
 type AuthContextType = {

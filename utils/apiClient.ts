@@ -104,6 +104,8 @@ export const authAPI = {
 
     deleteAccount: () => apiClient.delete('/auth/me'),
 
+    toggleMonetization: () => apiClient.post('/auth/monetization/toggle'),
+
     // Utils
     uploadImage: async (fileUri: string) => {
         const formData = new FormData();

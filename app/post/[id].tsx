@@ -1,6 +1,7 @@
 import CustomLoader from '@/components/CustomLoader';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
 import { commentAPI, postAPI } from '@/utils/apiClient';
 import { getSocket } from '@/utils/socket';
@@ -19,6 +20,7 @@ export default function PostDetailScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { user: currentUser } = useAuth();
+    const { showAlert } = useAlert();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
 
@@ -278,6 +280,43 @@ export default function PostDetailScreen() {
         }
     };
 
+    const handleLikeComment = async (commentId: string) => {
+        try {
+            // Optimistic update
+            setComments(prev => prev.map(c => {
+                const currentId = c._id || c.id;
+                if (currentId === commentId) {
+                    const alreadyLiked = c.likes?.includes(currentUser?._id);
+                    const newLikes = alreadyLiked
+                        ? (c.likes || []).filter((id: string) => id !== currentUser?._id)
+                        : [...(c.likes || []), currentUser?._id];
+                    return { ...c, likes: newLikes };
+                }
+
+                // Also check replies
+                if (c.replies) {
+                    const updatedReplies = c.replies.map((r: any) => {
+                        const rid = r._id || r.id;
+                        if (rid === commentId) {
+                            const alreadyLiked = r.likes?.includes(currentUser?._id);
+                            const newLikes = alreadyLiked
+                                ? (r.likes || []).filter((id: string) => id !== currentUser?._id)
+                                : [...(r.likes || []), currentUser?._id];
+                            return { ...r, likes: newLikes };
+                        }
+                        return r;
+                    });
+                    return { ...c, replies: updatedReplies };
+                }
+                return c;
+            }));
+
+            await commentAPI.likeComment(commentId);
+        } catch (error) {
+            console.log('Error liking comment:', error);
+        }
+    };
+
     const getRelativeTime = (timestamp: string) => {
         return new Date(timestamp).toLocaleDateString();
     };
@@ -402,12 +441,17 @@ export default function PostDetailScreen() {
                         {comments.map((comment: any) => (
                             <View key={comment._id || comment.id} style={[styles.commentContainer, { borderBottomColor: colors.border }]}>
                                 <View style={styles.commentRow}>
-                                    <TouchableOpacity onPress={() => handleProfilePress(comment.user?._id)}>
-                                        <Image
-                                            source={{ uri: comment.user?.avatar || 'https://ui-avatars.com/api/?name=' + (comment.user?.name || 'User') }}
-                                            style={styles.commentAvatar}
-                                        />
-                                    </TouchableOpacity>
+                                    <View style={styles.avatarColumn}>
+                                        <TouchableOpacity onPress={() => handleProfilePress(comment.user?._id)}>
+                                            <Image
+                                                source={{ uri: comment.user?.avatar || 'https://ui-avatars.com/api/?name=' + (comment.user?.name || 'User') }}
+                                                style={styles.commentAvatar}
+                                            />
+                                        </TouchableOpacity>
+                                        {comment.replies && comment.replies.length > 0 && (
+                                            <View style={[styles.threadConnector, { backgroundColor: colors.border }]} />
+                                        )}
+                                    </View>
                                     <View style={styles.commentContent}>
                                         <TouchableOpacity onPress={() => handleProfilePress(comment.user?._id)} style={styles.commentHeader}>
                                             <Text style={[styles.commentUser, { color: colors.text }]}>{comment.user?.name || 'User'}</Text>
@@ -416,8 +460,15 @@ export default function PostDetailScreen() {
                                         <Text style={[styles.commentText, { color: colors.text }]}>{comment.content}</Text>
 
                                         <View style={styles.commentActions}>
-                                            <TouchableOpacity style={styles.commentAction}>
-                                                <Ionicons name="heart-outline" size={16} color={colors.subtext} />
+                                            <TouchableOpacity
+                                                style={styles.commentAction}
+                                                onPress={() => handleLikeComment(comment._id || comment.id)}
+                                            >
+                                                <Ionicons
+                                                    name={comment.likes?.includes(currentUser?._id) ? "heart" : "heart-outline"}
+                                                    size={16}
+                                                    color={comment.likes?.includes(currentUser?._id) ? "#ef4444" : colors.subtext}
+                                                />
                                                 <Text style={[styles.commentActionText, { color: colors.subtext }]}>{comment.likes?.length || comment.likesCount || 0}</Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity onPress={() => startReply(comment)} style={styles.commentAction}>
@@ -439,7 +490,24 @@ export default function PostDetailScreen() {
                                                         <Text style={[styles.commentUser, { color: colors.text }]}>{reply.user?.name || 'User'}</Text>
                                                         <Text style={[styles.commentTime, { color: colors.subtext }]}>{getRelativeTime(reply.createdAt || reply.timestamp)}</Text>
                                                     </TouchableOpacity>
+                                                    <Text style={[styles.replyToText, { color: colors.subtext }]}>
+                                                        Replying to <Text style={{ color: colors.primary }}>@{comment.user?.name}</Text>
+                                                    </Text>
                                                     <Text style={[styles.commentText, { color: colors.text }]}>{reply.content}</Text>
+
+                                                    <View style={styles.commentActions}>
+                                                        <TouchableOpacity
+                                                            style={styles.commentAction}
+                                                            onPress={() => handleLikeComment(reply._id || reply.id)}
+                                                        >
+                                                            <Ionicons
+                                                                name={reply.likes?.includes(currentUser?._id) ? "heart" : "heart-outline"}
+                                                                size={14}
+                                                                color={reply.likes?.includes(currentUser?._id) ? "#ef4444" : colors.subtext}
+                                                            />
+                                                            <Text style={[styles.commentActionText, { color: colors.subtext }]}>{reply.likes?.length || 0}</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
                                                 </View>
                                             </View>
                                         ))}
@@ -609,11 +677,21 @@ const styles = StyleSheet.create({
     commentRow: {
         flexDirection: 'row',
     },
+    avatarColumn: {
+        alignItems: 'center',
+        marginRight: 12,
+    },
     commentAvatar: {
         width: 36,
         height: 36,
         borderRadius: 18,
-        marginRight: 12,
+    },
+    threadConnector: {
+        width: 2,
+        flex: 1,
+        marginTop: 4,
+        borderRadius: 1,
+        opacity: 0.3,
     },
     commentContent: {
         flex: 1,
@@ -621,7 +699,7 @@ const styles = StyleSheet.create({
     commentHeader: {
         flexDirection: 'row',
         gap: 8,
-        marginBottom: 4,
+        marginBottom: 2,
     },
     commentUser: {
         fontSize: 14,
@@ -631,11 +709,15 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontFamily: 'PlusJakartaSans_400Regular',
     },
+    replyToText: {
+        fontSize: 13,
+        fontFamily: 'PlusJakartaSans_500Medium',
+        marginBottom: 4,
+    },
     commentText: {
         fontSize: 15,
         fontFamily: 'PlusJakartaSans_400Regular',
         lineHeight: 20,
-        marginBottom: 12,
     },
     commentActions: {
         flexDirection: 'row',

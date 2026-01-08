@@ -61,6 +61,8 @@ export default function WalletHistoryScreen() {
             case 'escrow_hold': return { name: 'cart-outline', color: '#ec4899', bg: '#ec489920' };
             case 'escrow_release': return { name: 'checkmark-circle-outline', color: '#10b981', bg: '#10b98120' };
             case 'contestant_fee': return { name: 'trophy-outline', color: '#f97316', bg: '#f9731620' };
+            case 'monetization_like': return { name: 'heart-outline', color: '#ec4899', bg: '#ec489920' };
+            case 'monetization_comment': return { name: 'chatbubble-outline', color: '#3b82f6', bg: '#3b82f620' };
             default: return { name: 'wallet-outline', color: colors.subtext, bg: colors.card };
         }
     };
@@ -83,6 +85,8 @@ export default function WalletHistoryScreen() {
                 case 'escrow_hold': title = 'Market Purchase'; break;
                 case 'escrow_release': title = 'Market Sale Revenue'; break;
                 case 'contestant_fee': title = 'Contestant Fee'; break;
+                case 'monetization_like': title = 'Monetization: Likes'; break;
+                case 'monetization_comment': title = 'Monetization: Comments'; break;
             }
         }
 
