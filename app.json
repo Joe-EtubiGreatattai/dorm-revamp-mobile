@@ -34,7 +34,7 @@
         "android.permission.WAKE_LOCK",
         "android.permission.BLUETOOTH"
       ],
-      "package": "com.joegreat.dorm"
+      "package": "com.joegreat.dormrevamp"
     },
     "web": {
       "bundler": "metro",
