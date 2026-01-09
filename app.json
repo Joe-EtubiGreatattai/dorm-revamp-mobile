@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "dorm-revamp",
-    "slug": "dorm-revamp",
+    "name": "Dorm",
+    "slug": "dorm",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "dormrevamp",
+    "scheme": "dorm",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -34,7 +34,7 @@
         "android.permission.WAKE_LOCK",
         "android.permission.BLUETOOTH"
       ],
-      "package": "com.joegreat.dormrevamp"
+      "package": "com.joegreat.dorm"
     },
     "web": {
       "bundler": "metro",

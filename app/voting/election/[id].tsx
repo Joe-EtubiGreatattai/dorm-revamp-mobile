@@ -163,7 +163,7 @@ export default function ElectionDetail() {
                     style={[styles.backBtn, { backgroundColor: colors.card }]}
                     onPress={() => {
                         Share.share({
-                            message: `Check out ${election.title} on Dorm Revamp! ${election.description}`,
+                            message: `Check out ${election.title} on Dorm! ${election.description}`,
                         });
                     }}
                 >

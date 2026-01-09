@@ -1,6 +1,6 @@
-Dorm Revamp: The Ultimate Campus Super App
+Dorm: The Ultimate Campus Super App
 
-Revolutionize your student experience with Dorm Revamp, the all-in-one platform designed specifically for campus life. Whether you're looking for a place to stay, wanting to buy or sell textbooks, or staying connected with your peers, Dorm Revamp has everything you need to thrive.
+Revolutionize your student experience with Dorm, the all-in-one platform designed specifically for campus life. Whether you're looking for a place to stay, wanting to buy or sell textbooks, or staying connected with your peers, Dorm has everything you need to thrive.
 
 Key Features:
 
@@ -25,4 +25,4 @@ Access and share study materials, notes, and academic resources to excel in your
 7. Real-time Notifications:
 Never miss an update. Get instant alerts for new messages, marketplace offers, housing tour confirmations, and campus news.
 
-Dorm Revamp is built by students, for students. Download now and take control of your campus life!
+Dorm is built by students, for students. Download now and take control of your campus life!

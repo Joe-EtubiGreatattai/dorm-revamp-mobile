@@ -113,7 +113,7 @@ export default function SettingsScreen() {
                 <View style={[styles.section, { backgroundColor: colors.card }]}>
                     {renderSettingItem('help-buoy-outline', 'Help Center', '/settings/help', '#3b82f6')}
                     {renderSettingItem('bug-outline', 'Report a Bug', '/settings/bug_report', '#ef4444')}
-                    {renderSettingItem('information-circle-outline', 'About Dorm Revamp', '/settings/about', '#6b7280')}
+                    {renderSettingItem('information-circle-outline', 'About Dorm', '/settings/about', '#6b7280')}
                 </View>
 
                 {/* Footer */}

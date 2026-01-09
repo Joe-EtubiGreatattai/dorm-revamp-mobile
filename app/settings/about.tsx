@@ -29,7 +29,7 @@ export default function About() {
                     <View style={[styles.logoBox, { backgroundColor: colors.primary }]}>
                         <Ionicons name="school" size={40} color="#fff" />
                     </View>
-                    <Text style={[styles.appName, { color: colors.text }]}>Dorm Revamp</Text>
+                    <Text style={[styles.appName, { color: colors.text }]}>Dorm</Text>
                     <Text style={[styles.version, { color: colors.subtext }]}>Version 1.0.0 (Build 124)</Text>
                     <View style={[styles.badge, { backgroundColor: colors.card, borderColor: colors.border }]}>
                         <Text style={[styles.badgeText, { color: colors.primary }]}>Early Access</Text>
@@ -37,13 +37,13 @@ export default function About() {
                 </View>
 
                 <Text style={[styles.description, { color: colors.text }]}>
-                    Dorm Revamp is the ultimate student companion app designed to simplify campus life. From voting to marketplaces, we've got you covered.
+                    Dorm is the ultimate student companion app designed to simplify campus life. From voting to marketplaces, we've got you covered.
                 </Text>
 
                 <View style={[styles.section, { backgroundColor: colors.card }]}>
                     <TouchableOpacity
                         style={[styles.linkRow, { borderBottomColor: colors.border, borderBottomWidth: 1 }]}
-                        onPress={() => Linking.openURL('https://dormrevamp.com')}
+                        onPress={() => Linking.openURL('https://dorm.com')}
                     >
                         <Text style={[styles.linkLabel, { color: colors.text }]}>Website</Text>
                         <Ionicons name="open-outline" size={20} color={colors.subtext} />
@@ -65,10 +65,10 @@ export default function About() {
                 </View>
 
                 <Text style={[styles.footerText, { color: colors.subtext }]}>
-                    Built with ❤️ by the Dorm Revamp Team using Expo & React Native.
+                    Built with ❤️ by the Dorm Team using Expo & React Native.
                 </Text>
                 <Text style={[styles.footerText, { color: colors.subtext, marginTop: 4 }]}>
-                    © 2026 Dorm Revamp Inc.
+                    © 2026 Dorm Inc.
                 </Text>
 
             </ScrollView>
