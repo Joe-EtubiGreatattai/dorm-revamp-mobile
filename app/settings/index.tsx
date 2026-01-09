@@ -98,6 +98,7 @@ export default function SettingsScreen() {
                     {renderSettingItem('person-outline', 'Personal Information', '/settings/account')}
                     {renderSettingItem('cash-outline', 'Monetization', '/settings/monetization', '#f59e0b')}
                     {renderSettingItem('shield-checkmark-outline', 'Security & Login', '/settings/security')}
+                    {renderSettingItem('trash-outline', 'Delete Account', '/settings/delete_account', '#ef4444', true)}
                 </View>
 
                 {/* App Settings */}

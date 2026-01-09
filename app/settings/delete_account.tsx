@@ -6,7 +6,7 @@ import { authAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DeleteAccountScreen() {
@@ -120,6 +120,20 @@ export default function DeleteAccountScreen() {
                     <Ionicons name="chatbubbles-outline" size={20} color={colors.subtext} />
                     <Text style={[styles.listText, { color: colors.subtext }]}>Chats & Messages</Text>
                 </View>
+            </View>
+
+            <View style={{ marginTop: 32, padding: 16, backgroundColor: colors.card, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border }}>
+                <Text style={{ fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: colors.subtext, textAlign: 'center', marginBottom: 8 }}>
+                    Prefer to request deletion via web?
+                </Text>
+                <TouchableOpacity
+                    onPress={() => Linking.openURL('https://dorm-revamp-landing.vercel.app/delete-account')}
+                    style={{ alignItems: 'center' }}
+                >
+                    <Text style={{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 14, color: colors.primary }}>
+                        Open Deletion Request Portal
+                    </Text>
+                </TouchableOpacity>
             </View>
         </View>
     );
