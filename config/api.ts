@@ -1,7 +1,7 @@
 const PORT = '5001';
 
 // Production URL (Render)
-const PROD_URL = 'https://dorm-revamp-backend.onrender.com';
+const PROD_URL = 'https://dorm-revamp-backend-x895.onrender.com';
 
 // Local IP (For development)
 // const LOCAL_IP = '192.168.0.130';
