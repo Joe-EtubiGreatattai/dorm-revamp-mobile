@@ -1,0 +1,92 @@
+{
+  "project_info": {
+    "project_number": "266666349240",
+    "project_id": "tax-e-760f5",
+    "storage_bucket": "tax-e-760f5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:266666349240:android:1c66958ef03eb09be7da4d",
+        "android_client_info": {
+          "package_name": "com.joegreat.dormrevamp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "266666349240-rjg9p0kddiq9iftbjf85eidbcdqptroe.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.joegreat.dormrevamp",
+            "certificate_hash": "a0db25d209dafab4336d05830f09f85b497c4aee"
+          }
+        },
+        {
+          "client_id": "266666349240-s29afjv5f70lj3hcm7l97e02oir111rd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqw1qLrApcQrhwSKxW_arEFYHaP4MkyGU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "266666349240-s29afjv5f70lj3hcm7l97e02oir111rd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:266666349240:android:e8363f994f860fb1e7da4d",
+        "android_client_info": {
+          "package_name": "com.joegreat.tabbotfrontend"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "266666349240-5f9a37871kjff4su1e0m2vhlm8tkidse.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.joegreat.tabbotfrontend",
+            "certificate_hash": "3a47817625288e85b8996c84190f3bafb6e12d3e"
+          }
+        },
+        {
+          "client_id": "266666349240-5hm38tjev67j3i7ghhfd0subk06pbj7j.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.joegreat.tabbotfrontend",
+            "certificate_hash": "4ad83f871ed161f97b5c1e9a11ac12bf68c4202f"
+          }
+        },
+        {
+          "client_id": "266666349240-s29afjv5f70lj3hcm7l97e02oir111rd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqw1qLrApcQrhwSKxW_arEFYHaP4MkyGU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "266666349240-s29afjv5f70lj3hcm7l97e02oir111rd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

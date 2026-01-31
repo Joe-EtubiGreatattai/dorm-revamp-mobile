@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const { width } = Dimensions.get('window');
 
 import CountdownTimer from '@/components/CountdownTimer';
+import CustomLoader from '@/components/CustomLoader';
 import { electionAPI } from '@/utils/apiClient';
 // ... imports
 
@@ -92,6 +93,7 @@ export default function VotingScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+            {isLoading && <CustomLoader message="Loading Elections..." />}
             {/* Header ... */}
             <View style={styles.header}>
                 <View>
@@ -121,9 +123,7 @@ export default function VotingScreen() {
                 {/* Active Elections */}
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: colors.text }]}>Active Elections</Text>
-                    {isLoading ? (
-                        <Text style={{ marginLeft: 20, color: colors.subtext }}>Loading elections...</Text>
-                    ) : activeElections.length > 0 ? (
+                    {activeElections.length > 0 ? (
                         <ScrollView
                             horizontal
                             showsHorizontalScrollIndicator={false}

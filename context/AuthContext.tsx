@@ -90,7 +90,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     // Initialize socket with token
                     initSocket(token);
                     // Register Push Token on session restore too
-                    registerForPushNotificationsAsync();
+                    await registerForPushNotificationsAsync();
                 }
             } catch (error) {
                 console.log('Error loading user:', error);
@@ -116,7 +116,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             // Initialize socket with token
             initSocket(token);
             // Register Push Token
-            registerForPushNotificationsAsync();
+            await registerForPushNotificationsAsync();
 
             router.replace('/(tabs)');
         } catch (error: any) {
@@ -134,7 +134,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setUser(userResponse);
 
             // Register Push Token
-            registerForPushNotificationsAsync();
+            await registerForPushNotificationsAsync();
 
             router.replace('/(tabs)');
         } catch (error: any) {

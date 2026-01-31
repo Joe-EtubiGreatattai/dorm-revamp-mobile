@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bitcode": false
+      "bitcode": false,
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
@@ -34,7 +35,8 @@
         "android.permission.WAKE_LOCK",
         "android.permission.BLUETOOTH"
       ],
-      "package": "com.joegreat.dormrevamp"
+      "package": "com.joegreat.dormrevamp",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",

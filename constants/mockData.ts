@@ -615,6 +615,8 @@ export const UNIVERSITIES = [
     'Bayero University Kano (BUK)',
     'University of Port Harcourt (UNIPORT)',
     'Bowen University',
+    'Federal University Lokoja (FULOKOJA)',
+    'University of Abuja (UNIABUJA)',
 ];
 
 export const NOTIFICATIONS = [
