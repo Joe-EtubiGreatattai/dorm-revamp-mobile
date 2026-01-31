@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "Dorm",
+    "owner": "xstack-dev",
     "slug": "dorm-revamp",
     "version": "1.0.0",
     "orientation": "portrait",
