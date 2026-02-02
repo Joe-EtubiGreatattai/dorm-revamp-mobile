@@ -1,10 +1,11 @@
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 48) / 2;
@@ -21,7 +22,11 @@ interface MarketItemProps {
 }
 
 export default function MarketItem({ item }: { item: MarketItemProps }) {
-    if (!item || (!item.id && !item._id) || !item.title) return null;
+    console.log(`📦 [MarketItem] Rendering item ${item?._id || item?.id}. COLUMN_WIDTH: ${COLUMN_WIDTH}, Device Width: ${width}`);
+    if (!item || (!item.id && !item._id) || !item.title) {
+        console.log('⚠️ [MarketItem] Item rejected by guard:', { id: item?.id, _id: item?._id, hasTitle: !!item?.title });
+        return null;
+    }
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'] || Colors.light;
     const [isLiked, setIsLiked] = React.useState(false);

@@ -4,12 +4,13 @@ import MyListings from '@/components/housing/MyListings';
 import TourRequests from '@/components/housing/TourRequests';
 import HousingCard from '@/components/HousingCard';
 import MarketFilterModal, { FilterState } from '@/components/MarketFilterModal';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useDebounce } from '@/hooks/useDebounce';

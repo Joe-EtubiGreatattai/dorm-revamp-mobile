@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 // import * as WebBrowser from 'expo-web-browser';
+import { Text } from '@/components/Themed';
 import { useAuth } from '@/context/AuthContext';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -17,7 +18,6 @@ import {
     ScrollView,
     Share,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View
 } from 'react-native';
@@ -321,9 +321,10 @@ export default function ServiceDetail() {
                 onConfirm={confirmBooking}
                 title="Confirm Booking"
                 description={`Book ${item.title} with ${seller.name} for ₦${item.price?.toLocaleString()}? Duration: ${item.duration || 'Flexible'}.`}
-                buttonText={isPurchasing ? "Processing..." : "Request Booking"}
+                buttonText="Request Booking"
                 showCancel={true}
                 iconName="calendar"
+                isLoading={isPurchasing}
             />
             {/* Success Modal */}
             <ActionSuccessModal

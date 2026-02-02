@@ -1,6 +1,7 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
 import CustomLoader from '@/components/CustomLoader';
 import ReviewModal from '@/components/ReviewModal';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import { SOCKET_URL } from '@/config/api';
 import Colors from '@/constants/Colors';
@@ -14,7 +15,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import * as Sharing from 'expo-sharing';
 import React, { useState } from 'react';
-import { Dimensions, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Platform, ScrollView, Share, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');

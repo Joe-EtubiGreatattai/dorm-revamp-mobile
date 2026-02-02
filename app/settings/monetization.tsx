@@ -1,11 +1,13 @@
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
 import { authAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import React from 'react';
-import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function MonetizationScreen() {
@@ -13,6 +15,7 @@ export default function MonetizationScreen() {
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
     const { user, refreshUser } = useAuth();
+    const { showAlert } = useAlert();
     const [isToggling, setIsToggling] = React.useState(false);
 
     const followerCount = user?.followers?.length || 0;
@@ -22,12 +25,31 @@ export default function MonetizationScreen() {
 
     const handleToggleMonetization = async () => {
         if (isToggling) return;
+
+        // Check verification first
+        if (user?.kycStatus !== 'verified') {
+            showAlert({
+                title: 'Verification Required',
+                description: 'Identity verification is required to enable monetization.',
+                type: 'error',
+                buttonText: 'Verify Now',
+                showCancel: true,
+                onConfirm: () => router.push('/profile/verification')
+            });
+            return;
+        }
+
         setIsToggling(true);
         try {
             await authAPI.toggleMonetization();
             await refreshUser();
         } catch (error: any) {
-            alert(error.response?.data?.message || 'Failed to toggle monetization');
+            showAlert({
+                title: 'Monetization Error',
+                description: error.response?.data?.message || 'Failed to toggle monetization',
+                type: 'error',
+                buttonText: 'OK'
+            });
         } finally {
             setIsToggling(false);
         }

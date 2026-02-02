@@ -1,4 +1,5 @@
 import CustomLoader from '@/components/CustomLoader';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlert } from '@/context/AlertContext';
@@ -12,7 +13,6 @@ import React, { useEffect, useState } from 'react';
 import {
     ScrollView,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View
 } from 'react-native';

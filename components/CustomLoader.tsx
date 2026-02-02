@@ -1,6 +1,7 @@
+import { Text } from '@/components/Themed';
 import Colors from '@/constants/Colors';
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Animated, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, StyleSheet, View } from 'react-native';
 import { useColorScheme } from './useColorScheme';
 
 export default function CustomLoader({ message = "Loading..." }: { message?: string }) {

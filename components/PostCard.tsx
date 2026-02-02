@@ -1,11 +1,14 @@
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { ResizeMode } from 'expo-av';
 import { Image } from 'expo-image';
 import React, { useState } from 'react';
-import { Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import VideoPlayer from './VideoPlayer';
 
 import { useAlert } from '@/context/AlertContext';
 import { useRouter } from 'expo-router';
@@ -40,18 +43,23 @@ interface PostProps {
         name: string;
         avatar: string;
         monetizationEnabled?: boolean;
+        role?: string;
     } | null;
     content: string;
     images: string[];
+    video?: string;
+    locations?: string[];
     timestamp: string;
     likes: string[] | number; // Support both for robustness
     shares: number;
     liked?: boolean;
     savedBy?: string[];
+    views: number;
+    isAnonymous?: boolean;
     comments: CommentProps[];
 }
 
-export default function PostCard({ post }: { post: PostProps }) {
+export default function PostCard({ post, isViewable }: { post: PostProps, isViewable?: boolean }) {
     const { user: currentUser } = useAuth();
     const { showAlert } = useAlert();
     const router = useRouter();
@@ -65,9 +73,25 @@ export default function PostCard({ post }: { post: PostProps }) {
     const [likesCount, setLikesCount] = React.useState(getLikesCount(post.likes));
     const [sharesCount, setSharesCount] = React.useState(post.shares || 0);
     const [bookmarked, setBookmarked] = React.useState(post.savedBy?.includes(currentUser?._id || '') || false);
+    const [views, setViews] = React.useState(post.views || 0);
     const [isMenuVisible, setMenuVisible] = React.useState(false);
     const [isVisible, setIsVisible] = React.useState(true);
     const [isEditModalVisible, setEditModalVisible] = useState(false);
+
+    // Increment view count on mount
+    React.useEffect(() => {
+        const incrementViewCount = async () => {
+            try {
+                const response = await postAPI.incrementView(post._id);
+                if (response.data?.views !== undefined) {
+                    setViews(response.data.views);
+                }
+            } catch (error) {
+                console.error('Failed to increment view:', error);
+            }
+        };
+        incrementViewCount();
+    }, [post._id]);
 
     // Sync state with props for real-time updates from parent
     React.useEffect(() => {
@@ -75,7 +99,8 @@ export default function PostCard({ post }: { post: PostProps }) {
         setLikesCount(getLikesCount(post.likes));
         setSharesCount(post.shares || 0);
         setBookmarked(post.savedBy?.includes(currentUser?._id || '') || false);
-    }, [post.likes, post.shares, post.savedBy, currentUser?._id, post.liked]);
+        setViews(post.views || 0);
+    }, [post.likes, post.shares, post.savedBy, currentUser?._id, post.liked, post.views]);
 
     const likeScale = useSharedValue(1);
 
@@ -201,9 +226,18 @@ export default function PostCard({ post }: { post: PostProps }) {
         setEditModalVisible(true);
     };
 
+    const getInitials = (name: string) => {
+        if (!name) return 'U';
+        const parts = name.split(' ').filter(p => p.length > 0);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return parts[0] ? parts[0][0].toUpperCase() : 'U';
+    };
+
     const handleProfilePress = (e: any) => {
         e.stopPropagation();
-        if (post.user?._id) {
+        if (post.user?._id && post.user._id !== 'anonymous') {
             if (currentUser?._id === post.user._id) {
                 router.push('/profile');
             } else {
@@ -223,16 +257,42 @@ export default function PostCard({ post }: { post: PostProps }) {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleProfilePress} activeOpacity={0.7}>
-                    <Image
-                        source={{ uri: post.user?.avatar || 'https://ui-avatars.com/api/?name=' + (post.user?.name || 'User') }}
-                        style={styles.avatar}
-                    />
+                    {post.user?.avatar ? (
+                        <Image
+                            source={{ uri: post.user.avatar }}
+                            style={styles.avatar}
+                        />
+                    ) : (
+                        <View style={[styles.avatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
+                            <Text style={[styles.initialsText, { color: colors.primary }]}>
+                                {getInitials(post.user?.name || 'User')}
+                            </Text>
+                        </View>
+                    )}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleProfilePress} activeOpacity={0.7} style={styles.userInfo}>
                     <View style={styles.nameContainer}>
-                        <Text style={[styles.userName, { color: colors.text }]}>{post.user?.name || 'Deleted User'}</Text>
-                        {post.user?.monetizationEnabled && (
+                        <Text
+                            style={[styles.userName, { color: colors.text }]}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                        >
+                            {post.user?.name || 'Anonymous'}
+                        </Text>
+                        {post.isAnonymous && (
+                            <View style={[styles.anonymousBadge, { backgroundColor: colors.primary + '15' }]}>
+                                <Ionicons name="eye-off" size={10} color={colors.primary} />
+                                <Text style={[styles.anonymousText, { color: colors.primary }]}>Anonymous</Text>
+                            </View>
+                        )}
+                        {post.user?.monetizationEnabled && !post.isAnonymous && (
                             <Ionicons name="checkmark-circle" size={16} color="#10b981" style={styles.monetizedIcon} />
+                        )}
+                        {post.user?.role === 'ambassador' && !post.isAnonymous && (
+                            <View style={styles.ambassadorBadge}>
+                                <Ionicons name="ribbon" size={12} color="#fff" />
+                                <Text style={styles.ambassadorText}>Ambassador</Text>
+                            </View>
                         )}
                     </View>
                     <Text style={[styles.timestamp, { color: colors.subtext }]}>{post.timestamp}</Text>
@@ -288,6 +348,32 @@ export default function PostCard({ post }: { post: PostProps }) {
             {/* Content */}
             <Text style={[styles.content, { color: colors.text }]}>{post.content}</Text>
 
+            {/* Locations */}
+            {post.locations && post.locations.length > 0 && (
+                <View style={styles.locationsRow}>
+                    {post.locations.map((loc, index) => (
+                        <View key={index} style={[styles.locationBadge, { backgroundColor: colors.primary + '10' }]}>
+                            <Ionicons name="location" size={12} color={colors.primary} />
+                            <Text style={[styles.locationText, { color: colors.primary }]}>{loc}</Text>
+                        </View>
+                    ))}
+                </View>
+            )}
+
+            {/* Video */}
+            {post.video && typeof post.video === 'string' && post.video.length > 0 && (
+                <View style={styles.videoContainer}>
+                    <VideoPlayer
+                        uri={post.video}
+                        postId={post._id}
+                        style={styles.postVideo}
+                        resizeMode={ResizeMode.CONTAIN}
+                        autoPlay={isViewable}
+                        isLooping={true}
+                    />
+                </View>
+            )}
+
             {/* Images */}
             {post.images.length > 0 && (
                 <View style={styles.imageGrid}>
@@ -328,6 +414,11 @@ export default function PostCard({ post }: { post: PostProps }) {
                         <Ionicons name="share-social-outline" size={20} color={colors.subtext} />
                         <Text style={[styles.actionText, { color: colors.subtext }]}>{sharesCount}</Text>
                     </TouchableOpacity>
+
+                    <View style={styles.actionBtn}>
+                        <Ionicons name="eye-outline" size={20} color={colors.subtext} />
+                        <Text style={[styles.actionText, { color: colors.subtext }]}>{views}</Text>
+                    </View>
                 </View>
 
                 <TouchableOpacity onPress={handleBookmark}>
@@ -367,12 +458,21 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         marginRight: 12,
     },
+    initialsContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    initialsText: {
+        fontSize: 16,
+        fontFamily: 'PlusJakartaSans_700Bold',
+    },
     userInfo: {
         flex: 1,
     },
     userName: {
         fontFamily: 'PlusJakartaSans_700Bold',
         fontSize: 16,
+        maxWidth: '85%',
     },
     nameContainer: {
         flexDirection: 'row',
@@ -460,5 +560,71 @@ const styles = StyleSheet.create({
     menuDivider: {
         height: 1,
         marginHorizontal: 8,
+    },
+    locationsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 12,
+    },
+    locationBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 4,
+    },
+    locationText: {
+        fontSize: 12,
+        fontFamily: 'PlusJakartaSans_700Bold',
+    },
+    videoContainer: {
+        width: '100%',
+        aspectRatio: 16 / 9,
+        backgroundColor: '#000',
+        borderRadius: 16,
+        marginBottom: 12,
+        overflow: 'hidden',
+    },
+    postVideo: {
+        width: '100%',
+        height: '100%',
+    },
+    videoLoader: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1,
+    },
+    anonymousBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 8,
+        marginLeft: 6,
+        gap: 4,
+    },
+    anonymousText: {
+        fontSize: 10,
+        fontFamily: 'PlusJakartaSans_700Bold',
+        letterSpacing: 0.3,
+    },
+    ambassadorBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#8b5cf6', // purple-500
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
+        marginLeft: 4,
+        gap: 4,
+    },
+    ambassadorText: {
+        color: '#fff',
+        fontSize: 10,
+        fontFamily: 'PlusJakartaSans_700Bold',
     },
 });

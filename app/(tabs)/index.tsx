@@ -1,18 +1,50 @@
 import CreatePostModal from '@/components/CreatePostModal';
 import PostCard from '@/components/PostCard';
 import PostSkeleton from '@/components/PostSkeleton';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/context/AuthContext';
 import { API_URL, chatAPI, electionAPI, notificationAPI, orderAPI, postAPI } from '@/utils/apiClient';
 import { getSocket } from '@/utils/socket';
+
+const UserAvatar = React.memo(({ user }: { user: any }) => {
+  const getAvatarUri = (avatarPath?: string) => {
+    if (!avatarPath) return null;
+    if (avatarPath.startsWith('http')) return avatarPath;
+    const normalizedPath = avatarPath.replace(/\\/g, '/');
+    return `${API_URL.replace('/api', '')}/${normalizedPath}`;
+  };
+
+  const avatarUri = getAvatarUri(user?.avatar);
+  const initials = user?.name
+    ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'U';
+
+  if (avatarUri) {
+    return (
+      <Image
+        source={{ uri: avatarUri }}
+        style={styles.avatar}
+        contentFit="cover"
+        transition={200}
+      />
+    );
+  }
+
+  return (
+    <View style={[styles.avatar, styles.initialsContainer]}>
+      <Text style={styles.initialsText}>{initials}</Text>
+    </View>
+  );
+});
 
 export default function FeedScreen() {
   const router = useRouter();
@@ -29,6 +61,17 @@ export default function FeedScreen() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [viewablePostId, setViewablePostId] = useState<string | null>(null);
+
+  const onViewableItemsChanged = React.useRef(({ viewableItems }: any) => {
+    if (viewableItems.length > 0) {
+      setViewablePostId(viewableItems[0].item?._id || null);
+    }
+  }).current;
+
+  const viewabilityConfig = React.useRef({
+    itemVisiblePercentThreshold: 50
+  }).current;
 
   const fetchData = React.useCallback(async (isInitial = false, pageNum = 1) => {
     if (isInitial) setIsLoading(true);
@@ -121,44 +164,14 @@ export default function FeedScreen() {
     return post.visibility === 'public';
   });
 
-  const getAvatarUri = (avatarPath?: string) => {
-    if (!avatarPath) return null;
-    if (avatarPath.startsWith('http')) return avatarPath;
-    // Replace backslashes (Windows) and handle leading slash
-    const normalizedPath = avatarPath.replace(/\\/g, '/');
-    return `${API_URL.replace('/api', '')}/${normalizedPath}`;
-  };
 
-  const UserAvatar = () => {
-    const avatarUri = getAvatarUri(user?.avatar);
-    const initials = user?.name
-      ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-      : 'U';
-
-    if (avatarUri) {
-      return (
-        <Image
-          source={{ uri: avatarUri }}
-          style={styles.avatar}
-          contentFit="cover"
-          transition={200}
-        />
-      );
-    }
-
-    return (
-      <View style={[styles.avatar, styles.initialsContainer]}>
-        <Text style={styles.initialsText}>{initials}</Text>
-      </View>
-    );
-  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Custom Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.push('/profile')}>
-          <UserAvatar />
+          <UserAvatar user={user} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Dorm</Text>
         <View style={styles.headerRight}>
@@ -201,9 +214,11 @@ export default function FeedScreen() {
         data={isLoading ? [1, 2, 3] : filteredPosts}
         extraData={posts}
         keyExtractor={(item, index) => isLoading ? `skeleton-${index}` : item._id}
-        renderItem={({ item }) => isLoading ? <PostSkeleton /> : <PostCard post={item} />}
+        renderItem={({ item }) => isLoading ? <PostSkeleton /> : <PostCard post={item} isViewable={item._id === viewablePostId} />}
         contentContainerStyle={styles.feedContent}
         showsVerticalScrollIndicator={false}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         ListEmptyComponent={
           !isLoading ? (
             <View style={styles.emptyContainer}>

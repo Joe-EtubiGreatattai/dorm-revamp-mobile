@@ -1,3 +1,4 @@
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlert } from '@/context/AlertContext';
@@ -6,7 +7,7 @@ import { authAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DeleteAccountScreen() {
@@ -83,7 +84,7 @@ export default function DeleteAccountScreen() {
                 type: 'success'
             });
 
-            router.replace('/(auth)/welcome'); // Or initial screen
+            router.replace('/(auth)'); // Or initial screen
 
         } catch (error: any) {
             showAlert({

@@ -1,4 +1,5 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { electionAPI, walletAPI } from '@/utils/apiClient';
@@ -10,7 +11,6 @@ import {
     Modal,
     ScrollView,
     StyleSheet,
-    Text,
     TextInput,
     TouchableOpacity,
     View

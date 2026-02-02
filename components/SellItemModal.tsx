@@ -1,3 +1,4 @@
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlert } from '@/context/AlertContext';
@@ -6,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SellItemModal({
@@ -169,6 +170,7 @@ export default function SellItemModal({
             });
         } catch (error: any) {
             setLoading(false);
+            console.error('❌ [Frontend] Listing failed:', error?.response?.data || error.message);
             showAlert({
                 title: 'Error',
                 description: error.response?.data?.message || 'Failed to list item. Please try again.',

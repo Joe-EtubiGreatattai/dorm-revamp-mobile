@@ -1,8 +1,10 @@
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
 import { authAPI, postAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
+import { ResizeMode } from 'expo-av';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
@@ -19,6 +21,7 @@ import {
     View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import VideoPlayer from './VideoPlayer';
 
 export default function CreatePostModal({ visible, onClose, post }: { visible: boolean, onClose: () => void, post?: any }) {
     const colorScheme = useColorScheme();
@@ -26,9 +29,15 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
     const { user } = useAuth();
     const [content, setContent] = useState(post?.content || '');
     const [images, setImages] = useState<string[]>(post?.images || []);
+    const [video, setVideo] = useState<string | null>(post?.video || null);
+    const [locations, setLocations] = useState<string[]>(post?.locations || []);
+    const [locationInput, setLocationInput] = useState('');
+    const [showLocationInput, setShowLocationInput] = useState(false);
     const [visibility, setVisibility] = useState<'public' | 'school'>(post?.visibility || 'public');
+    const [isAnonymous, setIsAnonymous] = useState(post?.isAnonymous || false);
     const [isVisibilityMenuVisible, setVisibilityMenuVisible] = useState(false);
     const [loading, setLoading] = useState(false);
+    const { showAlert } = useAlert();
     const isEditing = !!post;
 
     const maxLength = 280;
@@ -38,7 +47,7 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
 
     const pickImages = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsMultipleSelection: true,
             selectionLimit: 5 - images.length,
             quality: 0.7,
@@ -50,51 +59,94 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
         }
     };
 
+    const pickVideo = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['videos'],
+            allowsEditing: true,
+            quality: 1,
+        });
+
+        if (!result.canceled) {
+            setVideo(result.assets[0].uri);
+            setImages([]); // Clear images if video is selected (often apps limit to one or the other)
+        }
+    };
+
+    const addLocation = () => {
+        if (locationInput.trim() && !locations.includes(locationInput.trim())) {
+            setLocations([...locations, locationInput.trim()]);
+            setLocationInput('');
+        }
+    };
+
+    const removeLocation = (index: number) => {
+        setLocations(locations.filter((_, i) => i !== index));
+    };
+
     const removeImage = (index: number) => {
         setImages(images.filter((_, i) => i !== index));
     };
 
     const handlePost = async () => {
-        if (!content.trim() && images.length === 0) return;
+        if (!content.trim() && images.length === 0 && !video) return;
 
         setLoading(true);
         try {
-            if (isEditing) {
-                // Upload any new images first
-                const uploadedImages = await Promise.all(
-                    images.map(async (img) => {
-                        if (img.startsWith('http')) return img;
-                        return await authAPI.uploadImage(img);
-                    })
-                );
-                await postAPI.updatePost(post._id, { content, visibility, images: uploadedImages });
-            } else {
-                const formData = new FormData();
-                formData.append('content', content);
-                formData.append('visibility', visibility);
-
-                images.forEach((uri, index) => {
-                    const filename = uri.split('/').pop() || `image_${index}.jpg`;
-                    const match = /\.(\w+)$/.exec(filename);
-                    const type = match ? `image/${match[1]}` : `image`;
-
-                    // @ts-ignore
-                    formData.append('images', {
-                        uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
-                        name: filename,
-                        type,
-                    });
-                });
-
-                await postAPI.createPost(formData);
+            // 1. Upload video if local
+            let videoUrl = video;
+            if (video && !video.startsWith('http')) {
+                videoUrl = await authAPI.uploadImage(video);
             }
+
+            // 2. Upload images if local
+            const uploadedImages = await Promise.all(
+                images.map(async (img) => {
+                    if (img.startsWith('http')) return img;
+                    return await authAPI.uploadImage(img);
+                })
+            );
+
+            const payload = {
+                content,
+                visibility,
+                isAnonymous,
+                locations,
+                images: uploadedImages,
+                video: videoUrl,
+            };
+
+            if (isEditing) {
+                await postAPI.updatePost(post._id, payload);
+                showAlert({
+                    title: 'Post Updated',
+                    description: 'Your post has been updated successfully.',
+                    type: 'success'
+                });
+            } else {
+                await postAPI.createPost(payload);
+                showAlert({
+                    title: 'Post Created',
+                    description: 'Your post is now live on Dorm!',
+                    type: 'success'
+                });
+            }
+
             if (!isEditing) {
                 setContent('');
                 setImages([]);
+                setVideo(null);
+                setLocations([]);
+                setIsAnonymous(false);
             }
             onClose();
-        } catch (error) {
-            alert('Failed to post. Please try again.');
+        } catch (error: any) {
+            console.error('❌ [CREATE POST] Failed:', error);
+            const msg = error.response?.data?.message || error.message || 'Failed to create post';
+            showAlert({
+                title: 'Post Failed',
+                description: msg,
+                type: 'error'
+            });
         } finally {
             setLoading(false);
         }
@@ -109,10 +161,10 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
                         <Ionicons name="close" size={28} color={colors.text} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                        disabled={!content.trim() || loading}
+                        disabled={(!content.trim() && images.length === 0 && !video) || loading}
                         style={[
                             styles.postBtn,
-                            { backgroundColor: colors.primary, opacity: content.trim() && !loading ? 1 : 0.5 }
+                            { backgroundColor: colors.primary, opacity: (content.trim() || images.length > 0 || video) && !loading ? 1 : 0.5 }
                         ]}
                         onPress={handlePost}
                     >
@@ -182,20 +234,36 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
                         <View style={styles.inputWrapper}>
                             <Image source={{ uri: user?.avatar || 'https://ui-avatars.com/api/?name=User' }} style={styles.avatar} />
                             <View style={styles.inputContainer}>
-                                <TouchableOpacity
-                                    style={[styles.audienceBtn, { borderColor: colors.border }]}
-                                    onPress={() => setVisibilityMenuVisible(true)}
-                                >
-                                    <Ionicons
-                                        name={visibility === 'public' ? "earth-outline" : "school-outline"}
-                                        size={14}
-                                        color={colors.primary}
-                                    />
-                                    <Text style={[styles.audienceText, { color: colors.primary }]}>
-                                        {visibility === 'public' ? 'Public' : 'My School'}
-                                    </Text>
-                                    <Ionicons name="chevron-down" size={12} color={colors.primary} />
-                                </TouchableOpacity>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <TouchableOpacity
+                                        style={[styles.audienceBtn, { borderColor: colors.border }]}
+                                        onPress={() => setVisibilityMenuVisible(true)}
+                                    >
+                                        <Ionicons
+                                            name={visibility === 'public' ? "earth-outline" : "school-outline"}
+                                            size={14}
+                                            color={colors.primary}
+                                        />
+                                        <Text style={[styles.audienceText, { color: colors.primary }]}>
+                                            {visibility === 'public' ? 'Public' : 'My School'}
+                                        </Text>
+                                        <Ionicons name="chevron-down" size={12} color={colors.primary} />
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[styles.audienceBtn, { borderColor: colors.border, marginLeft: 8 }]}
+                                        onPress={() => setIsAnonymous(!isAnonymous)}
+                                    >
+                                        <Ionicons
+                                            name={isAnonymous ? "eye-off" : "eye"}
+                                            size={14}
+                                            color={isAnonymous ? colors.primary : colors.subtext}
+                                        />
+                                        <Text style={[styles.audienceText, { color: isAnonymous ? colors.primary : colors.subtext }]}>
+                                            {isAnonymous ? 'Anonymous' : 'Public ID'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
 
                                 <TextInput
                                     multiline
@@ -210,13 +278,64 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
                             </View>
                         </View>
 
-                        {/* Image Preview */}
-                        {images.length > 0 && (
+                        {/* Location Tags Preview */}
+                        {locations.length > 0 && (
+                            <View style={styles.locationTagsContainer}>
+                                {locations.map((loc, index) => (
+                                    <View key={index} style={[styles.locationChip, { backgroundColor: colors.primary + '15' }]}>
+                                        <Ionicons name="location" size={12} color={colors.primary} />
+                                        <Text style={[styles.locationChipText, { color: colors.primary }]}>{loc}</Text>
+                                        <TouchableOpacity onPress={() => removeLocation(index)}>
+                                            <Ionicons name="close-circle" size={14} color={colors.primary} />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        {/* Location Input */}
+                        {showLocationInput && (
+                            <View style={[styles.locationInputSection, { borderTopColor: colors.border }]}>
+                                <TextInput
+                                    placeholder="Tag a location..."
+                                    placeholderTextColor={colors.subtext}
+                                    style={[styles.locationTextInput, { color: colors.text }]}
+                                    value={locationInput}
+                                    onChangeText={setLocationInput}
+                                    onSubmitEditing={addLocation}
+                                    blurOnSubmit={false}
+                                    autoFocus
+                                />
+                                <TouchableOpacity onPress={addLocation} style={styles.addLocationBtn}>
+                                    <Ionicons name="add-circle" size={24} color={colors.primary} />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {/* Image/Video Preview */}
+                        {(images.length > 0 || video) && (
                             <ScrollView
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
                                 contentContainerStyle={styles.imagePreviewContainer}
                             >
+                                {video && (
+                                    <View style={styles.previewWrapper}>
+                                        <VideoPlayer
+                                            uri={video}
+                                            style={styles.previewImage}
+                                            resizeMode={ResizeMode.COVER}
+                                            autoPlay={true}
+                                            isLooping={true}
+                                        />
+                                        <TouchableOpacity
+                                            style={[styles.removeImageBtn, { backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 10 }]}
+                                            onPress={() => setVideo(null)}
+                                        >
+                                            <Ionicons name="close" size={16} color="#fff" />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
                                 {images.map((uri, index) => (
                                     <View key={index} style={styles.previewWrapper}>
                                         <Image source={{ uri }} style={styles.previewImage} />
@@ -228,7 +347,7 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
                                         </TouchableOpacity>
                                     </View>
                                 ))}
-                                {images.length < 5 && (
+                                {images.length < 5 && !video && (
                                     <TouchableOpacity
                                         style={[styles.addMoreBtn, { borderColor: colors.border }]}
                                         onPress={pickImages}
@@ -249,11 +368,26 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
                                 color={images.length >= 5 ? colors.subtext : colors.primary}
                             />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.toolItem}>
-                            <Ionicons name="videocam-outline" size={24} color={colors.primary} />
+                        <TouchableOpacity
+                            style={styles.toolItem}
+                            onPress={pickVideo}
+                            disabled={images.length > 0}
+                        >
+                            <Ionicons
+                                name="videocam-outline"
+                                size={24}
+                                color={images.length > 0 ? colors.subtext : colors.primary}
+                            />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.toolItem}>
-                            <Ionicons name="location-outline" size={24} color={colors.primary} />
+                        <TouchableOpacity
+                            style={styles.toolItem}
+                            onPress={() => setShowLocationInput(!showLocationInput)}
+                        >
+                            <Ionicons
+                                name={showLocationInput ? "location" : "location-outline"}
+                                size={24}
+                                color={colors.primary}
+                            />
                         </TouchableOpacity>
 
                         <View style={{ flex: 1 }} />
@@ -275,14 +409,11 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
                                     <View style={[styles.divider, { backgroundColor: colors.border }]} />
                                 </>
                             )}
-                            <TouchableOpacity style={[styles.addBtn, { borderColor: colors.border }]}>
-                                <Ionicons name="add" size={20} color={colors.primary} />
-                            </TouchableOpacity>
                         </View>
                     </View>
                 </KeyboardAvoidingView>
             </View>
-        </Modal>
+        </Modal >
     );
 }
 
@@ -343,7 +474,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     audienceText: {
-        fontSize: 13,
+        fontSize: 12,
         fontFamily: 'PlusJakartaSans_700Bold',
     },
     input: {
@@ -423,6 +554,7 @@ const styles = StyleSheet.create({
         borderRadius: 13,
         justifyContent: 'center',
         alignItems: 'center',
+        zIndex: 10,
     },
     addMoreBtn: {
         width: 150,
@@ -471,6 +603,49 @@ const styles = StyleSheet.create({
     menuDivider: {
         height: 1,
         marginVertical: 4,
+    },
+    locationTagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        paddingHorizontal: 60,
+        gap: 8,
+        marginBottom: 12,
+    },
+    locationChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        gap: 6,
+    },
+    locationChipText: {
+        fontSize: 13,
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+    },
+    locationInputSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 60,
+        paddingVertical: 12,
+        borderTopWidth: 0,
+        gap: 12,
+    },
+    locationTextInput: {
+        flex: 1,
+        fontFamily: 'PlusJakartaSans_500Medium',
+        fontSize: 15,
+        height: 40,
+    },
+    addLocationBtn: {
+        padding: 4,
+    },
+    videoOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 12,
     },
 });
 

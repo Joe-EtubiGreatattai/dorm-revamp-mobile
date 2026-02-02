@@ -1,4 +1,6 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
+import CustomLoader from '@/components/CustomLoader';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { chatAPI } from '@/utils/apiClient';
@@ -8,7 +10,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import React from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function MessagesScreen() {
@@ -129,30 +131,65 @@ export default function MessagesScreen() {
         }
     };
 
+    const getInitials = (name: string) => {
+        if (!name) return 'U';
+        const parts = name.split(' ').filter(p => p.length > 0);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return parts[0] ? parts[0][0].toUpperCase() : 'U';
+    };
+
     const renderItem = ({ item }: { item: any }) => {
         const isTyping = typingUsers[item.id];
+        const userName = item.user?.name || 'Unknown User';
 
         return (
             <TouchableOpacity
                 style={[styles.messageItem, { borderBottomColor: colors.border }]}
                 onPress={() => router.push(`/chat/${item.id}`)}
             >
-                <Image source={{ uri: item.user?.avatar || 'https://i.pravatar.cc/150' }} style={styles.avatar} />
+                {item.user?.avatar ? (
+                    <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
+                ) : (
+                    <View style={[styles.avatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
+                        <Text style={[styles.initialsText, { color: colors.primary }]}>
+                            {getInitials(userName)}
+                        </Text>
+                    </View>
+                )}
                 <View style={styles.messageContent}>
                     <View style={styles.messageHeader}>
-                        <Text style={[styles.userName, { color: colors.text }]}>{item.user?.name || 'Unknown User'}</Text>
+                        <Text
+                            style={[styles.userName, { color: colors.text }]}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                        >
+                            {userName}
+                        </Text>
                         <Text style={[styles.timestamp, { color: colors.subtext }]}>
                             {getRelativeTime(item.lastMessageAt || item.timestamp)}
                         </Text>
                     </View>
+
                     <View style={styles.messageFooter}>
                         {isTyping ? (
                             <Text style={[styles.typingText, { color: colors.primary }]}>typing...</Text>
                         ) : (
-                            <Text style={[styles.lastMessage, { color: item.unread ? colors.text : colors.subtext, fontWeight: item.unread ? '700' : '400' }]} numberOfLines={1}>
+                            <Text
+                                style={[
+                                    styles.lastMessage,
+                                    {
+                                        color: item.unread ? colors.text : colors.subtext,
+                                        fontWeight: item.unread ? '700' : '400'
+                                    }
+                                ]}
+                                numberOfLines={1}
+                            >
                                 {item.lastMessage || 'No messages yet'}
                             </Text>
                         )}
+
                         {item.unreadCount > 0 && (
                             <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
                                 <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
@@ -210,6 +247,8 @@ export default function MessagesScreen() {
                     </View>
                 )}
             />
+
+            {isLoading && <CustomLoader message="Loading messages..." />}
 
             <ActionSuccessModal
                 visible={isNewMessageModalVisible}
@@ -275,6 +314,14 @@ const styles = StyleSheet.create({
         borderRadius: 28,
         marginRight: 16,
     },
+    initialsContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    initialsText: {
+        fontSize: 20,
+        fontFamily: 'PlusJakartaSans_700Bold',
+    },
     messageContent: {
         flex: 1,
         justifyContent: 'center',
@@ -288,6 +335,8 @@ const styles = StyleSheet.create({
     userName: {
         fontSize: 16,
         fontFamily: 'PlusJakartaSans_700Bold',
+        flex: 1,
+        marginRight: 12,
     },
     timestamp: {
         fontSize: 12,

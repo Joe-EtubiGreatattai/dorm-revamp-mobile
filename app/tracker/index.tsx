@@ -1,4 +1,5 @@
 import CustomLoader from '@/components/CustomLoader';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { getSocket } from '@/utils/socket';
@@ -6,9 +7,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import React from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAlert } from '@/context/AlertContext';
 import { orderAPI } from '@/utils/apiClient';
 // ... imports
 
@@ -16,6 +18,7 @@ export default function OrderHistoryScreen() {
     const router = useRouter();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
+    const { showAlert } = useAlert();
 
     const [orders, setOrders] = React.useState<any[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -49,10 +52,15 @@ export default function OrderHistoryScreen() {
                 fetchOrders();
             });
 
-            // Cleanup listener on unmount
+            socket.on('order:cancelled', (data: any) => {
+                console.log('📡 [ORDERS] Order cancelled:', data);
+                fetchOrders();
+            });
+
             return () => {
                 console.log('📡 [ORDERS] Cleaning up socket listener');
                 socket.off('order:statusUpdate');
+                socket.off('order:cancelled');
             };
         }
     }, [fetchOrders]);
@@ -64,6 +72,34 @@ export default function OrderHistoryScreen() {
 
     const activeOrders = orders.filter(o => !['delivered', 'cancelled', 'declined'].includes(o.status?.toLowerCase()));
     const pastOrders = orders.filter(o => ['delivered', 'cancelled', 'declined'].includes(o.status?.toLowerCase()));
+
+    const handleCancelOrder = (orderId: string, itemTitle: string) => {
+        showAlert({
+            title: 'Cancel Order',
+            description: `Are you sure you want to cancel your order for "${itemTitle}"? Funds will be refunded to your wallet.`,
+            type: 'error',
+            buttonText: 'Cancel Order',
+            cancelText: 'Keep Order',
+            showCancel: true,
+            onConfirm: async () => {
+                try {
+                    await orderAPI.cancelOrder(orderId);
+                    showAlert({
+                        title: 'Order Cancelled',
+                        description: 'Your order has been cancelled and funds have been refunded.',
+                        type: 'success'
+                    });
+                    fetchOrders();
+                } catch (error: any) {
+                    showAlert({
+                        title: 'Error',
+                        description: error.response?.data?.message || 'Failed to cancel order',
+                        type: 'error'
+                    });
+                }
+            }
+        });
+    };
 
     const renderOrderCard = ({ item, isActive }: { item: any, isActive: boolean }) => (
         <TouchableOpacity
@@ -95,8 +131,18 @@ export default function OrderHistoryScreen() {
                             <Ionicons name="time-outline" size={14} color={colors.subtext} />
                             <Text style={[styles.etaText, { color: colors.subtext }]}>{item.eta || 'Calculating...'}</Text>
                         </View>
-                        <View style={[styles.trackBtn, { borderColor: colors.primary }]}>
-                            <Text style={[styles.trackBtnText, { color: colors.primary }]}>Track</Text>
+                        <View style={styles.actionButtons}>
+                            {['pending', 'processing'].includes(item.status?.toLowerCase()) && (
+                                <TouchableOpacity
+                                    style={[styles.cancelBtn, { borderColor: colors.error }]}
+                                    onPress={() => handleCancelOrder(item._id, item.itemId?.title || 'this item')}
+                                >
+                                    <Text style={[styles.cancelBtnText, { color: colors.error }]}>Cancel</Text>
+                                </TouchableOpacity>
+                            )}
+                            <View style={[styles.trackBtn, { borderColor: colors.primary }]}>
+                                <Text style={[styles.trackBtnText, { color: colors.primary }]}>Track</Text>
+                            </View>
                         </View>
                     </View>
                 )}
@@ -253,6 +299,21 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     trackBtnText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 12,
+    },
+    actionButtons: {
+        flexDirection: 'row',
+        gap: 8,
+        alignItems: 'center',
+    },
+    cancelBtn: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
+    cancelBtnText: {
         fontFamily: 'PlusJakartaSans_700Bold',
         fontSize: 12,
     },

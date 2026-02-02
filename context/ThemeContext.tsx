@@ -3,33 +3,51 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useColorScheme as useNativeColorScheme } from 'react-native';
 
 type ThemeMode = 'light' | 'dark' | 'system';
+export type FontSizeMode = 'small' | 'medium' | 'large';
 
 interface ThemeContextType {
     theme: 'light' | 'dark'; // Actual resolved theme
     themePreference: ThemeMode; // User preference
+    fontSize: FontSizeMode;
+    fontSizeMultiplier: number;
     setTheme: (theme: ThemeMode) => void;
+    setFontSize: (size: FontSizeMode) => void;
     toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const FONT_SIZE_MULTIPLIERS = {
+    small: 0.85,
+    medium: 1.0,
+    large: 1.2,
+};
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const nativeColorScheme = useNativeColorScheme();
     const [themePreference, setThemePreference] = useState<ThemeMode>('system');
+    const [fontSize, setFontSizeState] = useState<FontSizeMode>('medium');
     const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(nativeColorScheme ?? 'light');
 
     useEffect(() => {
-        const loadTheme = async () => {
+        const loadSettings = async () => {
             try {
-                const savedTheme = await AsyncStorage.getItem('theme');
+                const [savedTheme, savedFontSize] = await Promise.all([
+                    AsyncStorage.getItem('theme'),
+                    AsyncStorage.getItem('fontSize'),
+                ]);
+
                 if (savedTheme) {
                     setThemePreference(savedTheme as ThemeMode);
                 }
+                if (savedFontSize) {
+                    setFontSizeState(savedFontSize as FontSizeMode);
+                }
             } catch (error) {
-                console.log('Failed to load theme', error);
+                console.log('Failed to load theme settings', error);
             }
         };
-        loadTheme();
+        loadSettings();
     }, []);
 
     useEffect(() => {
@@ -40,10 +58,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
     }, [themePreference, nativeColorScheme]);
 
-    // Listen to system changes if no explicit preference override? 
-    // For now, let's say if user manually sets it, we respect it. 
-    // If not, we could track system. But usually easier to just stick to saved or manual.
-
     const setTheme = async (newTheme: ThemeMode) => {
         setThemePreference(newTheme);
         try {
@@ -53,13 +67,32 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const setFontSize = async (newSize: FontSizeMode) => {
+        setFontSizeState(newSize);
+        try {
+            await AsyncStorage.setItem('fontSize', newSize);
+        } catch (error) {
+            console.log('Failed to save font size', error);
+        }
+    };
+
     const toggleTheme = async () => {
         const newTheme = resolvedTheme === 'light' ? 'dark' : 'light';
         setTheme(newTheme);
     };
 
+    const fontSizeMultiplier = FONT_SIZE_MULTIPLIERS[fontSize];
+
     return (
-        <ThemeContext.Provider value={{ theme: resolvedTheme, themePreference, setTheme, toggleTheme }}>
+        <ThemeContext.Provider value={{
+            theme: resolvedTheme,
+            themePreference,
+            fontSize,
+            fontSizeMultiplier,
+            setTheme,
+            setFontSize,
+            toggleTheme
+        }}>
             {children}
         </ThemeContext.Provider>
     );
@@ -71,6 +104,18 @@ export function useColorScheme() {
         throw new Error('useColorScheme must be used within a ThemeProvider');
     }
     return context.theme;
+}
+
+export function useFontSize() {
+    const context = useContext(ThemeContext);
+    if (context === undefined) {
+        throw new Error('useFontSize must be used within a ThemeProvider');
+    }
+    return {
+        fontSize: context.fontSize,
+        fontSizeMultiplier: context.fontSizeMultiplier,
+        setFontSize: context.setFontSize
+    };
 }
 
 export function useThemeHandlers() {

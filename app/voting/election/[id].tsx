@@ -1,6 +1,7 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
 import CountdownTimer from '@/components/CountdownTimer';
 import CustomLoader from '@/components/CustomLoader';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { authAPI, electionAPI } from '@/utils/apiClient';
@@ -13,7 +14,6 @@ import {
     ScrollView,
     Share,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View,
 } from 'react-native';

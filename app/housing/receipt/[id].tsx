@@ -1,4 +1,5 @@
 import CustomLoader from '@/components/CustomLoader';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { tourAPI } from '@/utils/apiClient';
@@ -9,7 +10,6 @@ import {
     Dimensions,
     ScrollView,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View
 } from 'react-native';

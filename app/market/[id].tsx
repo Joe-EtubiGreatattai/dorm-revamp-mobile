@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 // import * as WebBrowser from 'expo-web-browser';
+import { Text } from '@/components/Themed';
 import { useAuth } from '@/context/AuthContext';
 import React, { useRef, useState } from 'react';
 import {
@@ -17,7 +18,6 @@ import {
     ScrollView,
     Share,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View
 } from 'react-native';
@@ -54,8 +54,11 @@ export default function MarketItemDetail() {
         id: sellerData?._id || 'unknown',
         name: sellerData?.name || 'Unknown User',
         avatar: sellerData?.avatar || 'https://i.pravatar.cc/150',
-        university: sellerData?.university || 'Campus'
+        university: sellerData?.university || 'Campus',
+        stats: item?.vendorStats || { avgRating: 0, reviewCount: 0 }
     };
+
+    const isOwner = user?._id === seller.id;
 
     React.useEffect(() => {
         const fetchItem = async () => {
@@ -224,6 +227,14 @@ export default function MarketItemDetail() {
                         <View style={styles.sellerInfo}>
                             <Text style={[styles.sellerName, { color: colors.text }]}>{seller.name}</Text>
                             <Text style={[styles.sellerSchool, { color: colors.subtext }]}>{seller.university}</Text>
+                            {seller.stats.reviewCount > 0 && (
+                                <View style={styles.ratingRow}>
+                                    <Ionicons name="star" size={14} color="#FFD700" />
+                                    <Text style={[styles.ratingText, { color: colors.text }]}>
+                                        {seller.stats.avgRating} ({seller.stats.reviewCount} reviews)
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                         <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
                     </TouchableOpacity>
@@ -253,10 +264,16 @@ export default function MarketItemDetail() {
                     <Text style={[styles.chatBtnText, { color: colors.primary }]}>Chat</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.buyBtn, { backgroundColor: colors.primary }]}
+                    style={[
+                        styles.buyBtn,
+                        { backgroundColor: isOwner ? colors.border : colors.primary }
+                    ]}
                     onPress={handleBuy}
+                    disabled={isOwner}
                 >
-                    <Text style={styles.buyBtnText}>Buy Now</Text>
+                    <Text style={[styles.buyBtnText, { color: isOwner ? colors.subtext : '#fff' }]}>
+                        {isOwner ? 'Your Listing' : 'Buy Now'}
+                    </Text>
                 </TouchableOpacity>
             </SafeAreaView>
 
@@ -269,6 +286,7 @@ export default function MarketItemDetail() {
                 buttonText="Confirm"
                 showCancel={true}
                 iconName="cart"
+                isLoading={isPurchasing}
             />
             {/* Success Modal */}
             <ActionSuccessModal
@@ -409,6 +427,16 @@ const styles = StyleSheet.create({
     sellerSchool: {
         fontFamily: 'PlusJakartaSans_500Medium',
         fontSize: 13,
+    },
+    ratingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 4,
+    },
+    ratingText: {
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+        fontSize: 12,
     },
     descriptionSection: {
         marginBottom: 24,

@@ -1,5 +1,6 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
 import CustomLoader from '@/components/CustomLoader';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { electionAPI } from '@/utils/apiClient';
@@ -12,7 +13,6 @@ import {
     Image,
     Modal,
     StyleSheet,
-    Text,
     TextInput,
     TouchableOpacity,
     View,

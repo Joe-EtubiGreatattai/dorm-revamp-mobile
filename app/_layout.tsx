@@ -11,6 +11,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
@@ -83,7 +84,11 @@ function RootLayoutNav({ fontsLoaded }: { fontsLoaded: boolean }) {
 
   useEffect(() => {
     if (fontsLoaded && !isLoading) {
-      SplashScreen.hideAsync();
+      // Small delay to ensure the initial screen has rendered
+      const timer = setTimeout(() => {
+        SplashScreen.hideAsync().catch(() => { /* Ignore errors if already hidden */ });
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [fontsLoaded, isLoading]);
 
@@ -116,11 +121,13 @@ function RootLayoutNav({ fontsLoaded }: { fontsLoaded: boolean }) {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="settings/support_chat" options={{ headerShown: false }} />
+      <StatusBar style="auto" />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true }} />
+        <Stack.Screen name="manage-listings" />
+        <Stack.Screen name="settings/support_chat" />
       </Stack>
     </ThemeProvider>
   );

@@ -1,14 +1,15 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
 import CustomLoader from '@/components/CustomLoader';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { orderAPI } from '@/utils/apiClient';
+import { orderAPI, reviewAPI } from '@/utils/apiClient';
 import { getSocket } from '@/utils/socket';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function TrackerScreen() {
@@ -24,6 +25,15 @@ export default function TrackerScreen() {
     const [isConfirmVisible, setConfirmVisible] = useState(false);
     const [isCancelVisible, setCancelVisible] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
+    const [isConfirming, setIsConfirming] = useState(false);
+    const [rating, setRating] = useState(0);
+    const [reviewContent, setReviewContent] = useState('');
+    const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+    const [hasReviewed, setHasReviewed] = useState(false);
+
+    // Derived values
+    const item = order?.itemId || {};
+    const seller = order?.sellerId || {};
 
     useEffect(() => {
         const fetchOrder = async () => {
@@ -45,29 +55,54 @@ export default function TrackerScreen() {
         if (socket) {
             console.log('📡 [TRACK] Setting up socket listener for order:', id);
 
-            socket.on('order:statusUpdate', (data: any) => {
-                console.log('📡 [TRACK] Received order update:', data);
-
-                // Only update if it's for this order
+            const handleUpdate = (data: any) => {
+                console.log('📡 [TRACK] Received socket event:', data);
                 if (data.orderId === id || data.orderId?.toString() === id) {
-                    console.log('📡 [TRACK] Updating order with new data');
-                    setOrder((prevOrder: any) => ({
-                        ...prevOrder,
-                        status: data.status,
-                        eta: data.eta
-                    }));
+                    console.log('📡 [TRACK] Refetching order data...');
+                    fetchOrder();
                 }
-            });
+            };
+
+            socket.on('order:statusUpdate', handleUpdate);
+            socket.on('order:cancelled', handleUpdate);
+            socket.on('order:escrowReleased', handleUpdate);
 
             // Cleanup listener on unmount
             return () => {
-                console.log('📡 [TRACK] Cleaning up socket listener');
-                socket.off('order:statusUpdate');
+                console.log('📡 [TRACK] Cleaning up socket listeners');
+                socket.off('order:statusUpdate', handleUpdate);
+                socket.off('order:cancelled', handleUpdate);
+                socket.off('order:escrowReleased', handleUpdate);
             };
         }
     }, [id]);
 
+    const handleSubmitReview = async () => {
+        if (rating === 0) {
+            alert('Please select a rating');
+            return;
+        }
+
+        setIsSubmittingReview(true);
+        try {
+            await reviewAPI.submitReview({
+                targetId: seller._id || seller.id,
+                targetType: 'vendor',
+                rating,
+                content: reviewContent
+            });
+            setHasReviewed(true);
+            setSuccessVisible(true);
+        } catch (error) {
+            console.log('Error submitting review:', error);
+            alert('Failed to submit review');
+        } finally {
+            setIsSubmittingReview(false);
+        }
+    };
+
     const handleConfirmReceipt = async () => {
+        setIsConfirming(true);
         try {
             await orderAPI.confirmReceipt(id as string);
             setEscrowStatus('released');
@@ -76,6 +111,8 @@ export default function TrackerScreen() {
         } catch (error) {
             console.log('Error confirming receipt:', error);
             alert('Failed to confirm receipt. Please try again.');
+        } finally {
+            setIsConfirming(false);
         }
     };
 
@@ -124,8 +161,6 @@ export default function TrackerScreen() {
         );
     }
 
-    const item = order.itemId || {};
-    const seller = order.sellerId || {};
 
     // Define steps based on type and status
     // Assuming order.timeline is provided by backend [ { title, time, completed, current } ]
@@ -303,6 +338,40 @@ export default function TrackerScreen() {
                             <Text style={[styles.confirmBtnText, { color: colors.background }]}>Confirm Receipt & Release Funds</Text>
                         </TouchableOpacity>
                     )}
+
+                    {escrowStatus === 'released' && !hasReviewed && (
+                        <View style={styles.reviewSection}>
+                            <Text style={[styles.reviewTitle, { color: colors.text }]}>How was your experience?</Text>
+                            <View style={styles.starsContainer}>
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                    <TouchableOpacity key={star} onPress={() => setRating(star)}>
+                                        <Ionicons
+                                            name={star <= rating ? "star" : "star-outline"}
+                                            size={32}
+                                            color={star <= rating ? "#FFD700" : colors.subtext}
+                                        />
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                            <TextInput
+                                style={[styles.reviewInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                                placeholder="Write a brief review about this vendor..."
+                                placeholderTextColor={colors.subtext}
+                                multiline
+                                value={reviewContent}
+                                onChangeText={setReviewContent}
+                            />
+                            <TouchableOpacity
+                                style={[styles.submitReviewBtn, { backgroundColor: colors.primary }]}
+                                onPress={handleSubmitReview}
+                                disabled={isSubmittingReview}
+                            >
+                                <Text style={styles.submitReviewText}>
+                                    {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
 
                 <View style={{ height: 40 }} />
@@ -326,6 +395,7 @@ export default function TrackerScreen() {
                 cancelText="Not Yet"
                 iconName="warning"
                 showCancel={true}
+                isLoading={isConfirming}
             />
 
             {/* Cancel Confirmation Modal */}
@@ -569,5 +639,43 @@ const styles = StyleSheet.create({
     confirmBtnText: {
         fontFamily: 'PlusJakartaSans_700Bold',
         fontSize: 14,
+    },
+    reviewSection: {
+        marginTop: 20,
+        paddingTop: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#eee',
+    },
+    reviewTitle: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 16,
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    starsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 12,
+        marginBottom: 16,
+    },
+    reviewInput: {
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 12,
+        height: 80,
+        textAlignVertical: 'top',
+        fontFamily: 'PlusJakartaSans_400Regular',
+        marginBottom: 16,
+    },
+    submitReviewBtn: {
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    submitReviewText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        color: '#fff',
+        fontSize: 15,
     },
 });

@@ -1,16 +1,19 @@
 import CustomLoader from '@/components/CustomLoader';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
+import VideoPlayer from '@/components/VideoPlayer';
 import Colors from '@/constants/Colors';
 import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
 import { commentAPI, postAPI } from '@/utils/apiClient';
 import { getSocket } from '@/utils/socket';
 import { Ionicons } from '@expo/vector-icons';
+import { ResizeMode } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
@@ -33,6 +36,7 @@ export default function PostDetailScreen() {
     const [likesCount, setLikesCount] = useState(0);
     const [isBookmarked, setIsBookmarked] = useState(false);
     const [sharesCount, setSharesCount] = useState(0);
+    const [views, setViews] = useState(0);
     const [isMenuVisible, setMenuVisible] = useState(false);
     const [commentText, setCommentText] = useState('');
     const [replyingTo, setReplyingTo] = useState<any>(null);
@@ -68,9 +72,17 @@ export default function PostDetailScreen() {
             setLiked(postData.isLiked);
             setLikesCount(postData.likes?.length || postData.likesCount || 0);
             setSharesCount(postData.shares || postData.sharesCount || 0);
+            setViews(postData.views || 0);
             setIsBookmarked(postData.savedBy?.includes(currentUser?._id || '') || postData.isBookmarked || false);
 
             setComments(commentsRes.data || []);
+
+            // Increment view count
+            try {
+                await postAPI.incrementView(id as string);
+            } catch (error) {
+                console.error('Failed to increment view:', error);
+            }
         } catch (error) {
             console.log('Error fetching post details:', error);
         } finally {
@@ -89,6 +101,7 @@ export default function PostDetailScreen() {
                     setPost(updatedPost);
                     setLikesCount(updatedPost.likes?.length || updatedPost.likesCount || 0);
                     setSharesCount(updatedPost.shares || updatedPost.sharesCount || 0);
+                    setViews(updatedPost.views || 0);
 
                     if (currentUser?._id && updatedPost.likes) {
                         setLiked(updatedPost.likes.includes(currentUser._id));
@@ -233,6 +246,9 @@ export default function PostDetailScreen() {
         if (!commentText.trim()) return;
 
         const content = commentText;
+        const parentId = replyingTo?._id || replyingTo?.id;
+        console.log('📤 [Frontend] Posting comment. Parent ID:', parentId);
+
         setCommentText('');
         setReplyingTo(null);
         Keyboard.dismiss();
@@ -241,7 +257,7 @@ export default function PostDetailScreen() {
             const { data: newComment } = await commentAPI.createComment({
                 postId: id as string,
                 content,
-                parentCommentId: replyingTo?.id
+                parentCommentId: parentId
             });
 
             if (replyingTo) {
@@ -321,6 +337,49 @@ export default function PostDetailScreen() {
         return new Date(timestamp).toLocaleDateString();
     };
 
+    const getInitials = (name: string) => {
+        if (!name) return 'U';
+        const parts = name.split(' ').filter(p => p.length > 0);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return parts[0] ? parts[0][0].toUpperCase() : 'U';
+    };
+
+    const handleDeleteComment = async (commentId: string) => {
+        showAlert({
+            title: 'Delete Comment',
+            description: 'Are you sure you want to delete this comment?',
+            type: 'error',
+            showCancel: true,
+            buttonText: 'Delete',
+            onConfirm: async () => {
+                try {
+                    await commentAPI.deleteComment(commentId);
+                    setComments(prev => prev.filter(c => {
+                        if ((c._id || c.id) === commentId) return false;
+                        if (c.replies) {
+                            c.replies = c.replies.filter((r: any) => (r._id || r.id) !== commentId);
+                        }
+                        return true;
+                    }));
+                    showAlert({
+                        title: 'Success',
+                        description: 'Comment deleted successfully',
+                        type: 'success'
+                    });
+                } catch (error) {
+                    console.log('Error deleting comment:', error);
+                    showAlert({
+                        title: 'Error',
+                        description: 'Failed to delete comment',
+                        type: 'error'
+                    });
+                }
+            }
+        });
+    };
+
     return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
             <Stack.Screen options={{ headerShown: false }} />
@@ -342,17 +401,28 @@ export default function PostDetailScreen() {
             >
                 <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
                     <View style={styles.postSection}>
-                        <View style={styles.userRow}>
-                            <TouchableOpacity onPress={() => handleProfilePress(user?._id)}>
-                                <Image
-                                    source={{ uri: user?.avatar || 'https://ui-avatars.com/api/?name=' + (user?.name || 'User') }}
-                                    style={styles.avatar}
-                                />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleProfilePress(user?._id)} style={styles.userInfo}>
-                                <Text style={[styles.userName, { color: colors.text }]}>{user?.name || 'Deleted User'}</Text>
-                                <Text style={[styles.userHandle, { color: colors.subtext }]}>{user?.university || 'Academic Profile Missing'}</Text>
-                            </TouchableOpacity>
+                        {/* Header */}
+                        <View style={styles.postHeader}>
+                            <View style={styles.authorInfo}>
+                                <TouchableOpacity onPress={() => handleProfilePress(user?._id)}>
+                                    <Image
+                                        source={{ uri: user?.avatar || 'https://ui-avatars.com/api/?name=' + (user?.name || 'User') }}
+                                        style={styles.avatar}
+                                    />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleProfilePress(user?._id)} style={styles.userInfo}>
+                                    <View style={styles.nameRow}>
+                                        <Text style={[styles.userName, { color: colors.text }]}>{user?.name || 'Deleted User'}</Text>
+                                        {user?.role === 'ambassador' && (
+                                            <View style={styles.ambassadorBadge}>
+                                                <Ionicons name="ribbon" size={10} color="#fff" />
+                                                <Text style={styles.ambassadorText}>Ambassador</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    <Text style={[styles.userHandle, { color: colors.subtext }]}>{user?.university || 'Academic Profile Missing'}</Text>
+                                </TouchableOpacity>
+                            </View>
                             <TouchableOpacity onPress={() => setMenuVisible(true)}>
                                 <Ionicons name="ellipsis-horizontal" size={20} color={colors.subtext} />
                             </TouchableOpacity>
@@ -388,8 +458,36 @@ export default function PostDetailScreen() {
                             </TouchableOpacity>
                         </Modal>
 
+                        {/* Content */}
                         <Text style={[styles.content, { color: colors.text }]}>{post.content}</Text>
 
+                        {/* Locations */}
+                        {post.locations && post.locations.length > 0 && (
+                            <View style={styles.locationsRow}>
+                                {post.locations.map((loc: string, index: number) => (
+                                    <View key={index} style={[styles.locationBadge, { backgroundColor: colors.primary + '10' }]}>
+                                        <Ionicons name="location" size={12} color={colors.primary} />
+                                        <Text style={[styles.locationText, { color: colors.primary }]}>{loc}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        {/* Video */}
+                        {post.video && typeof post.video === 'string' && post.video.length > 0 && (
+                            <View style={styles.videoContainer}>
+                                <VideoPlayer
+                                    uri={post.video}
+                                    postId={post._id}
+                                    style={styles.postVideo}
+                                    resizeMode={ResizeMode.CONTAIN}
+                                    autoPlay={true}
+                                    isLooping={true}
+                                />
+                            </View>
+                        )}
+
+                        {/* Images */}
                         {post.images && post.images.length > 0 && (
                             <View style={styles.imageGrid}>
                                 {post.images.map((img: string, index: number) => (
@@ -410,6 +508,10 @@ export default function PostDetailScreen() {
                             <View style={styles.stat}>
                                 <Text style={[styles.statValue, { color: colors.text }]}>{comments.length}</Text>
                                 <Text style={[styles.statLabel, { color: colors.subtext }]}>Comments</Text>
+                            </View>
+                            <View style={styles.stat}>
+                                <Text style={[styles.statValue, { color: colors.text }]}>{views}</Text>
+                                <Text style={[styles.statLabel, { color: colors.subtext }]}>Views</Text>
                             </View>
                         </View>
 
@@ -438,83 +540,149 @@ export default function PostDetailScreen() {
                     </View>
 
                     <View style={styles.commentsSection}>
-                        {comments.map((comment: any) => (
-                            <View key={comment._id || comment.id} style={[styles.commentContainer, { borderBottomColor: colors.border }]}>
-                                <View style={styles.commentRow}>
-                                    <View style={styles.avatarColumn}>
-                                        <TouchableOpacity onPress={() => handleProfilePress(comment.user?._id)}>
-                                            <Image
-                                                source={{ uri: comment.user?.avatar || 'https://ui-avatars.com/api/?name=' + (comment.user?.name || 'User') }}
-                                                style={styles.commentAvatar}
-                                            />
-                                        </TouchableOpacity>
-                                        {comment.replies && comment.replies.length > 0 && (
-                                            <View style={[styles.threadConnector, { backgroundColor: colors.border }]} />
-                                        )}
-                                    </View>
-                                    <View style={styles.commentContent}>
-                                        <TouchableOpacity onPress={() => handleProfilePress(comment.user?._id)} style={styles.commentHeader}>
-                                            <Text style={[styles.commentUser, { color: colors.text }]}>{comment.user?.name || 'User'}</Text>
-                                            <Text style={[styles.commentTime, { color: colors.subtext }]}>{getRelativeTime(comment.createdAt || comment.timestamp)}</Text>
-                                        </TouchableOpacity>
-                                        <Text style={[styles.commentText, { color: colors.text }]}>{comment.content}</Text>
+                        {comments.map((comment: any) => {
+                            const isCommentAuthor = currentUser?._id === (comment.user?._id || comment.userId?._id || comment.userId);
+                            const isPostAuthor = currentUser?._id === (user?._id || post?.userId?._id || post?.userId);
 
-                                        <View style={styles.commentActions}>
-                                            <TouchableOpacity
-                                                style={styles.commentAction}
-                                                onPress={() => handleLikeComment(comment._id || comment.id)}
-                                            >
-                                                <Ionicons
-                                                    name={comment.likes?.includes(currentUser?._id) ? "heart" : "heart-outline"}
-                                                    size={16}
-                                                    color={comment.likes?.includes(currentUser?._id) ? "#ef4444" : colors.subtext}
-                                                />
-                                                <Text style={[styles.commentActionText, { color: colors.subtext }]}>{comment.likes?.length || comment.likesCount || 0}</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity onPress={() => startReply(comment)} style={styles.commentAction}>
-                                                <Ionicons name="chatbubble-outline" size={16} color={colors.subtext} />
-                                                <Text style={[styles.commentActionText, { color: colors.subtext }]}>Reply</Text>
-                                            </TouchableOpacity>
-                                        </View>
-
-                                        {comment.replies && comment.replies.map((reply: any) => (
-                                            <View key={reply._id || reply.id} style={styles.replyContainer}>
-                                                <TouchableOpacity onPress={() => handleProfilePress(reply.user?._id)}>
+                            return (
+                                <View key={comment._id || comment.id} style={[styles.commentContainer, { borderBottomColor: colors.border }]}>
+                                    <View style={styles.commentRow}>
+                                        <View style={styles.avatarColumn}>
+                                            <TouchableOpacity onPress={() => handleProfilePress(comment.user?._id)}>
+                                                {comment.user?.avatar ? (
                                                     <Image
-                                                        source={{ uri: reply.user?.avatar || 'https://ui-avatars.com/api/?name=' + (reply.user?.name || 'User') }}
-                                                        style={styles.replyAvatar}
+                                                        source={{ uri: comment.user.avatar }}
+                                                        style={styles.commentAvatar}
                                                     />
-                                                </TouchableOpacity>
-                                                <View style={styles.commentContent}>
-                                                    <TouchableOpacity onPress={() => handleProfilePress(reply.user?._id)} style={styles.commentHeader}>
-                                                        <Text style={[styles.commentUser, { color: colors.text }]}>{reply.user?.name || 'User'}</Text>
-                                                        <Text style={[styles.commentTime, { color: colors.subtext }]}>{getRelativeTime(reply.createdAt || reply.timestamp)}</Text>
-                                                    </TouchableOpacity>
-                                                    <Text style={[styles.replyToText, { color: colors.subtext }]}>
-                                                        Replying to <Text style={{ color: colors.primary }}>@{comment.user?.name}</Text>
-                                                    </Text>
-                                                    <Text style={[styles.commentText, { color: colors.text }]}>{reply.content}</Text>
-
-                                                    <View style={styles.commentActions}>
-                                                        <TouchableOpacity
-                                                            style={styles.commentAction}
-                                                            onPress={() => handleLikeComment(reply._id || reply.id)}
-                                                        >
-                                                            <Ionicons
-                                                                name={reply.likes?.includes(currentUser?._id) ? "heart" : "heart-outline"}
-                                                                size={14}
-                                                                color={reply.likes?.includes(currentUser?._id) ? "#ef4444" : colors.subtext}
-                                                            />
-                                                            <Text style={[styles.commentActionText, { color: colors.subtext }]}>{reply.likes?.length || 0}</Text>
-                                                        </TouchableOpacity>
+                                                ) : (
+                                                    <View style={[styles.commentAvatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
+                                                        <Text style={[styles.initialsText, { color: colors.primary, fontSize: 14 }]}>
+                                                            {getInitials(comment.user?.name || 'User')}
+                                                        </Text>
                                                     </View>
+                                                )}
+                                            </TouchableOpacity>
+                                            {comment.replies && comment.replies.length > 0 && (
+                                                <View style={[styles.threadConnector, { backgroundColor: colors.border }]} />
+                                            )}
+                                        </View>
+                                        <View style={styles.commentContent}>
+                                            <TouchableOpacity onPress={() => handleProfilePress(comment.user?._id)} style={styles.commentHeader}>
+                                                <View style={styles.nameRow}>
+                                                    <Text
+                                                        style={[styles.commentUser, { color: colors.text }]}
+                                                        numberOfLines={1}
+                                                        ellipsizeMode="tail"
+                                                    >
+                                                        {comment.user?.name || 'User'}
+                                                    </Text>
+                                                    {comment.user?.role === 'ambassador' && (
+                                                        <View style={[styles.ambassadorBadge, { paddingHorizontal: 6, paddingVertical: 1 }]}>
+                                                            <Ionicons name="ribbon" size={8} color="#fff" />
+                                                            <Text style={[styles.ambassadorText, { fontSize: 8 }]}>Ambassador</Text>
+                                                        </View>
+                                                    )}
                                                 </View>
+                                                <Text style={[styles.commentTime, { color: colors.subtext }]}>{getRelativeTime(comment.createdAt || comment.timestamp)}</Text>
+                                            </TouchableOpacity>
+                                            <Text style={[styles.commentText, { color: colors.text }]}>{comment.content}</Text>
+
+                                            <View style={styles.commentActions}>
+                                                <TouchableOpacity
+                                                    style={styles.commentAction}
+                                                    onPress={() => handleLikeComment(comment._id || comment.id)}
+                                                >
+                                                    <Ionicons
+                                                        name={comment.likes?.includes(currentUser?._id) ? "heart" : "heart-outline"}
+                                                        size={16}
+                                                        color={comment.likes?.includes(currentUser?._id) ? "#ef4444" : colors.subtext}
+                                                    />
+                                                    <Text style={[styles.commentActionText, { color: colors.subtext }]}>{comment.likes?.length || comment.likesCount || 0}</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity onPress={() => startReply(comment)} style={styles.commentAction}>
+                                                    <Ionicons name="chatbubble-outline" size={16} color={colors.subtext} />
+                                                    <Text style={[styles.commentActionText, { color: colors.subtext }]}>Reply</Text>
+                                                </TouchableOpacity>
+
+                                                {(isCommentAuthor || isPostAuthor) && (
+                                                    <TouchableOpacity onPress={() => handleDeleteComment(comment._id || comment.id)} style={styles.commentAction}>
+                                                        <Ionicons name="trash-outline" size={16} color={colors.error} />
+                                                        <Text style={[styles.commentActionText, { color: colors.error }]}>Delete</Text>
+                                                    </TouchableOpacity>
+                                                )}
                                             </View>
-                                        ))}
+
+                                            {comment.replies && comment.replies.map((reply: any) => {
+                                                const isReplyAuthor = currentUser?._id === (reply.user?._id || reply.userId?._id || reply.userId);
+                                                return (
+                                                    <View key={reply._id || reply.id} style={styles.replyContainer}>
+                                                        <TouchableOpacity onPress={() => handleProfilePress(reply.user?._id)}>
+                                                            {reply.user?.avatar ? (
+                                                                <Image
+                                                                    source={{ uri: reply.user.avatar }}
+                                                                    style={styles.replyAvatar}
+                                                                />
+                                                            ) : (
+                                                                <View style={[styles.replyAvatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
+                                                                    <Text style={[styles.initialsText, { color: colors.primary, fontSize: 12 }]}>
+                                                                        {getInitials(reply.user?.name || 'User')}
+                                                                    </Text>
+                                                                </View>
+                                                            )}
+                                                        </TouchableOpacity>
+                                                        <View style={styles.commentContent}>
+                                                            <TouchableOpacity onPress={() => handleProfilePress(reply.user?._id)} style={styles.commentHeader}>
+                                                                <View style={styles.nameRow}>
+                                                                    <Text
+                                                                        style={[styles.commentUser, { color: colors.text }]}
+                                                                        numberOfLines={1}
+                                                                        ellipsizeMode="tail"
+                                                                    >
+                                                                        {reply.user?.name || 'User'}
+                                                                    </Text>
+                                                                    {reply.user?.role === 'ambassador' && (
+                                                                        <View style={[styles.ambassadorBadge, { paddingHorizontal: 6, paddingVertical: 1 }]}>
+                                                                            <Ionicons name="ribbon" size={8} color="#fff" />
+                                                                            <Text style={[styles.ambassadorText, { fontSize: 8 }]}>Ambassador</Text>
+                                                                        </View>
+                                                                    )}
+                                                                </View>
+                                                                <Text style={[styles.commentTime, { color: colors.subtext }]}>{getRelativeTime(reply.createdAt || reply.timestamp)}</Text>
+                                                            </TouchableOpacity>
+                                                            <Text style={[styles.replyToText, { color: colors.subtext }]}>
+                                                                Replying to <Text style={{ color: colors.primary }}>@{comment.user?.name}</Text>
+                                                            </Text>
+                                                            <Text style={[styles.commentText, { color: colors.text }]}>{reply.content}</Text>
+
+                                                            <View style={styles.commentActions}>
+                                                                <TouchableOpacity
+                                                                    style={styles.commentAction}
+                                                                    onPress={() => handleLikeComment(reply._id || reply.id)}
+                                                                >
+                                                                    <Ionicons
+                                                                        name={reply.likes?.includes(currentUser?._id) ? "heart" : "heart-outline"}
+                                                                        size={14}
+                                                                        color={reply.likes?.includes(currentUser?._id) ? "#ef4444" : colors.subtext}
+                                                                    />
+                                                                    <Text style={[styles.commentActionText, { color: colors.subtext }]}>{reply.likes?.length || 0}</Text>
+                                                                </TouchableOpacity>
+
+                                                                {(isReplyAuthor || isPostAuthor) && (
+                                                                    <TouchableOpacity onPress={() => handleDeleteComment(reply._id || reply.id)} style={styles.commentAction}>
+                                                                        <Ionicons name="trash-outline" size={14} color={colors.error} />
+                                                                        <Text style={[styles.commentActionText, { color: colors.error }]}>Delete</Text>
+                                                                    </TouchableOpacity>
+                                                                )}
+                                                            </View>
+                                                        </View>
+                                                    </View>
+                                                );
+                                            })}
+                                        </View>
                                     </View>
                                 </View>
-                            </View>
-                        ))}
+                            );
+                        })}
                     </View>
                 </ScrollView>
 
@@ -537,10 +705,20 @@ export default function PostDetailScreen() {
                         </View>
                     )}
                     <View style={[styles.composer, { backgroundColor: colors.card }]}>
-                        <Image
-                            source={{ uri: currentUser?.avatar || 'https://ui-avatars.com/api/?name=' + (currentUser?.name || 'User') }}
-                            style={styles.composerAvatar}
-                        />
+                        <TouchableOpacity onPress={currentUser?._id ? () => handleProfilePress(currentUser?._id) : undefined}>
+                            {currentUser?.avatar ? (
+                                <Image
+                                    source={{ uri: currentUser.avatar }}
+                                    style={styles.composerAvatar}
+                                />
+                            ) : (
+                                <View style={[styles.composerAvatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
+                                    <Text style={[styles.initialsText, { color: colors.primary, fontSize: 12 }]}>
+                                        {getInitials(currentUser?.name || 'User')}
+                                    </Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
                         <TextInput
                             ref={inputRef}
                             placeholder="Post your reply"
@@ -560,7 +738,7 @@ export default function PostDetailScreen() {
                     </View>
                 </View>
             </KeyboardAvoidingView>
-        </View>
+        </View >
     );
 }
 
@@ -596,16 +774,32 @@ const styles = StyleSheet.create({
     postSection: {
         padding: 16,
     },
-    userRow: {
+    postHeader: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 16,
+    },
+    authorInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
     },
     avatar: {
         width: 50,
         height: 50,
         borderRadius: 25,
         marginRight: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    authorName: {
+        fontSize: 16,
+        fontFamily: 'PlusJakartaSans_700Bold',
+    },
+    authorHandle: {
+        fontSize: 14,
+        fontFamily: 'PlusJakartaSans_400Regular',
     },
     userInfo: {
         flex: 1,
@@ -625,17 +819,57 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     imageGrid: {
-        gap: 8,
-        marginBottom: 16,
+        marginTop: 12,
+        borderRadius: 16,
+        overflow: 'hidden',
     },
     postImage: {
         width: '100%',
-        height: 250,
+        aspectRatio: 16 / 9,
+    },
+    locationsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginVertical: 12,
+    },
+    locationBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 4,
+    },
+    locationText: {
+        fontSize: 12,
+        fontFamily: 'PlusJakartaSans_700Bold',
+    },
+    videoContainer: {
+        width: '100%',
+        aspectRatio: 16 / 9,
+        backgroundColor: '#000',
         borderRadius: 16,
+        marginVertical: 12,
+        overflow: 'hidden',
+    },
+    postVideo: {
+        width: '100%',
+        height: '100%',
+    },
+    postStats: {
+        // This style was not fully defined in the instruction, keeping it as is or removing if not used.
+        // Based on the instruction, it seems like a partial line.
+        // Assuming it was meant to be part of a larger style or a placeholder.
+        // For now, I'll keep it as is, but it might be an error in the instruction.
+        // If it's meant to be a margin or padding, it should be defined.
+        // Given the context, it's likely a typo and should be removed or corrected.
+        // I will remove it as it's incomplete and not used.
     },
     timestamp: {
         fontSize: 14,
         fontFamily: 'PlusJakartaSans_400Regular',
+        marginTop: 16, // Added marginTop to separate from media/content
         marginBottom: 16,
     },
     statsRow: {
@@ -686,6 +920,13 @@ const styles = StyleSheet.create({
         height: 36,
         borderRadius: 18,
     },
+    initialsContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    initialsText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+    },
     threadConnector: {
         width: 2,
         flex: 1,
@@ -704,6 +945,7 @@ const styles = StyleSheet.create({
     commentUser: {
         fontSize: 14,
         fontFamily: 'PlusJakartaSans_700Bold',
+        maxWidth: '70%',
     },
     commentTime: {
         fontSize: 14,
@@ -711,8 +953,27 @@ const styles = StyleSheet.create({
     },
     replyToText: {
         fontSize: 13,
-        fontFamily: 'PlusJakartaSans_500Medium',
-        marginBottom: 4,
+        fontFamily: 'PlusJakartaSans_400Regular',
+        marginBottom: 2,
+    },
+    nameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    ambassadorBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#8b5cf6',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
+        gap: 3,
+    },
+    ambassadorText: {
+        color: '#fff',
+        fontSize: 9,
+        fontFamily: 'PlusJakartaSans_700Bold',
     },
     commentText: {
         fontSize: 15,
@@ -818,4 +1079,13 @@ const styles = StyleSheet.create({
         height: 1,
         marginHorizontal: 8,
     },
+    videoLoader: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1,
+    },
 });
+
+

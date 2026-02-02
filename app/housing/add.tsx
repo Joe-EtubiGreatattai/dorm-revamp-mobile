@@ -1,4 +1,5 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { housingAPI } from '@/utils/apiClient';
@@ -14,7 +15,6 @@ import {
     Platform,
     ScrollView,
     StyleSheet,
-    Text,
     TextInput,
     TouchableOpacity,
     View
@@ -163,7 +163,7 @@ export default function AddProperty() {
 
     const pickImages = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsMultipleSelection: true,
             selectionLimit: 5 - formData.images.length, // Allow picking up to the remaining limit
             quality: 0.8,

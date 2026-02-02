@@ -1,5 +1,6 @@
 import CustomLoader from '@/components/CustomLoader';
 import PostCard from '@/components/PostCard';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlert } from '@/context/AlertContext';
@@ -9,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function UserProfileScreen() {
@@ -37,20 +38,25 @@ export default function UserProfileScreen() {
     }, [currentUser, id]);
 
     React.useEffect(() => {
+        console.log('👤 [Frontend] Profile ID changed:', id);
         const fetchData = async () => {
+            setIsLoading(true);
             try {
+                console.log('👤 [Frontend] Fetching profile for:', id);
                 const [userRes, postsRes] = await Promise.all([
                     authAPI.getUserProfile(id as string),
                     postAPI.getUserPosts(id as string)
                 ]);
+                console.log('👤 [Frontend] Profile fetched successfully:', userRes.data?.name);
                 setUser(userRes.data);
                 setUserPosts(postsRes.data);
                 // Check if current user is in the viewed user's followers
                 if (currentUser && userRes.data.followers) {
                     setIsFollowing(userRes.data.followers.includes(currentUser._id));
                 }
-            } catch (error) {
-                console.log('Error fetching user profile:', error);
+            } catch (error: any) {
+                console.log('❌ [Frontend] Error fetching user profile:', error.response?.data || error.message);
+                setUser(null);
             } finally {
                 setIsLoading(false);
             }
@@ -144,6 +150,15 @@ export default function UserProfileScreen() {
         });
     };
 
+    const getInitials = (name: string) => {
+        if (!name) return 'U';
+        const parts = name.split(' ').filter(p => p.length > 0);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return parts[0] ? parts[0][0].toUpperCase() : 'U';
+    };
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             <Stack.Screen options={{ headerShown: false }} />
@@ -154,9 +169,15 @@ export default function UserProfileScreen() {
                     <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={24} color={colors.text} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: colors.text }]}>{user.name}</Text>
+                    <Text
+                        style={[styles.headerTitle, { color: colors.text }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                    >
+                        {user.name}
+                    </Text>
                     {id === currentUser?._id ? (
-                        <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/settings')}>
+                        <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/profile')}>
                             <Ionicons name="settings-outline" size={24} color={colors.text} />
                         </TouchableOpacity>
                     ) : (
@@ -170,8 +191,30 @@ export default function UserProfileScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
                 {/* Profile Info Section */}
                 <View style={styles.profileHeader}>
-                    <Image source={{ uri: user.avatar }} style={styles.avatar} />
-                    <Text style={[styles.name, { color: colors.text }]}>{user.name}</Text>
+                    {user.avatar ? (
+                        <Image source={{ uri: user.avatar }} style={styles.avatar} />
+                    ) : (
+                        <View style={[styles.avatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
+                            <Text style={[styles.initialsText, { color: colors.primary, fontSize: 32 }]}>
+                                {getInitials(user.name)}
+                            </Text>
+                        </View>
+                    )}
+                    <View style={styles.nameRow}>
+                        <Text
+                            style={[styles.name, { color: colors.text }]}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                        >
+                            {user.name}
+                        </Text>
+                        {user.role === 'ambassador' && (
+                            <View style={styles.ambassadorBadge}>
+                                <Ionicons name="ribbon" size={12} color="#fff" />
+                                <Text style={styles.ambassadorText}>Ambassador</Text>
+                            </View>
+                        )}
+                    </View>
                     <Text style={[styles.university, { color: colors.subtext }]}>{user.university}</Text>
 
                     <View style={styles.statsContainer}>
@@ -252,6 +295,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontFamily: 'PlusJakartaSans_700Bold',
+        maxWidth: '70%',
     },
     profileHeader: {
         alignItems: 'center',
@@ -264,10 +308,19 @@ const styles = StyleSheet.create({
         borderRadius: 50,
         marginBottom: 16,
     },
+    initialsContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    initialsText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+    },
     name: {
         fontSize: 24,
         fontFamily: 'PlusJakartaSans_700Bold',
         marginBottom: 4,
+        textAlign: 'center',
+        maxWidth: '90%',
     },
     university: {
         fontSize: 16,
@@ -325,5 +378,27 @@ const styles = StyleSheet.create({
         fontFamily: 'PlusJakartaSans_700Bold',
         paddingHorizontal: 16,
         marginBottom: 12,
+    },
+    nameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        justifyContent: 'center',
+        width: '100%',
+        marginBottom: 4,
+    },
+    ambassadorBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#8b5cf6',
+        paddingHorizontal: 10,
+        paddingVertical: 3,
+        borderRadius: 12,
+        gap: 4,
+    },
+    ambassadorText: {
+        color: '#fff',
+        fontSize: 11,
+        fontFamily: 'PlusJakartaSans_700Bold',
     },
 });

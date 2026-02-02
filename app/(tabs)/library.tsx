@@ -1,6 +1,7 @@
 import CustomLoader from '@/components/CustomLoader';
 import EmptyState from '@/components/EmptyState';
 import LibraryFilterModal, { FilterState } from '@/components/LibraryFilterModal';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -9,7 +10,7 @@ import { libraryAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, RefreshControl, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function LibraryScreen() {

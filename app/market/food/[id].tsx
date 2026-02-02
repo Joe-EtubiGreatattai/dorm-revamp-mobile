@@ -1,5 +1,6 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
 import CustomLoader from '@/components/CustomLoader';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
@@ -16,7 +17,6 @@ import {
     ScrollView,
     Share,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View
 } from 'react-native';
@@ -300,9 +300,10 @@ export default function FoodDetail() {
                 onConfirm={confirmOrder}
                 title="Confirm Order"
                 description={`Order ${item.title} for ₦${item.price?.toLocaleString()}? Ready in ${item.prepTime || '30 min'}.`}
-                buttonText={isPurchasing ? "Ordering..." : "Order Now"}
+                buttonText="Order Now"
                 showCancel={true}
                 iconName="restaurant"
+                isLoading={isPurchasing}
             />
 
             <ActionSuccessModal

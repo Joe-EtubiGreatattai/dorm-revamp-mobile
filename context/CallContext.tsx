@@ -60,12 +60,24 @@ const CallContext = createContext<CallContextType>({
 
 export const useCall = () => useContext(CallContext);
 
-// STUN servers for NAT traversal
+// STUN and TURN servers for NAT traversal (Essential for production/Render)
 const rtcConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-    ]
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:openrelay.metered.ca:80' },
+        {
+            urls: [
+                'turn:openrelay.metered.ca:80',
+                'turn:openrelay.metered.ca:443',
+                'turn:openrelay.metered.ca:3478?transport=udp',
+                'turn:openrelay.metered.ca:3478?transport=tcp',
+            ],
+            username: 'openrelay',
+            credential: 'openrelay',
+        },
+    ],
+    iceSelectorPolicy: 'all',
 };
 
 export const CallProvider = ({ children }: { children: React.ReactNode }) => {

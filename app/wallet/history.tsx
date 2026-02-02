@@ -1,3 +1,4 @@
+import { Text } from '@/components/Themed';
 import TransactionDetailsModal from '@/components/TransactionDetailsModal';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -10,7 +11,6 @@ import {
     FlatList,
     RefreshControl,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View
 } from 'react-native';

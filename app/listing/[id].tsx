@@ -1,6 +1,7 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
 import CustomLoader from '@/components/CustomLoader';
 import ReviewModal from '@/components/ReviewModal';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
@@ -19,7 +20,6 @@ import {
     ScrollView,
     Share,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View
 } from 'react-native';

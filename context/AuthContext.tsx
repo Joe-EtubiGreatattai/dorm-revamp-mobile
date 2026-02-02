@@ -20,6 +20,7 @@ type User = {
         priceAlerts?: boolean;
         orderUpdates?: boolean;
         electionReminders?: boolean;
+        shares?: boolean;
     };
     privacySettings?: {
         appLock: boolean;
@@ -40,6 +41,11 @@ type User = {
     following?: string[];
     monetizationEnabled?: boolean;
     totalMonetizationEarnings?: number;
+    kycStatus?: 'pending' | 'verified' | 'rejected' | 'none';
+    identityNumber?: string;
+    identityType?: 'bvn' | 'nin';
+    kycDocument?: string;
+    role: 'user' | 'admin' | 'ambassador';
 };
 
 type AuthContextType = {
@@ -79,18 +85,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         const loadUser = async () => {
             try {
-                const onboarding = await SecureStore.getItemAsync('hasSeenOnboarding');
+                // Parallelize startup tasks
+                const [onboarding, token] = await Promise.all([
+                    SecureStore.getItemAsync('hasSeenOnboarding'),
+                    SecureStore.getItemAsync('token'),
+                ]);
+
                 setHasSeenOnboarding(onboarding === 'true');
 
-                const token = await SecureStore.getItemAsync('token');
                 if (token) {
                     setAuthToken(token);
+                    // Fetch user info - we don't block isLoading on this if we want fastest splash hide,
+                    // but we need the user object for initial routing. Let's parallelize the rest.
                     const { data } = await authAPI.getMe();
                     setUser(data);
-                    // Initialize socket with token
+
+                    // Non-blocking initialization
                     initSocket(token);
-                    // Register Push Token on session restore too
-                    await registerForPushNotificationsAsync();
+                    registerForPushNotificationsAsync().catch(err =>
+                        console.log('Push notification registration failed:', err)
+                    );
                 }
             } catch (error) {
                 console.log('Error loading user:', error);

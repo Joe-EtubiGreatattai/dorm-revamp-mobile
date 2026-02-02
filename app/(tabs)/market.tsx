@@ -2,12 +2,13 @@ import CustomLoader from '@/components/CustomLoader';
 import MarketFilterModal, { FilterState } from '@/components/MarketFilterModal';
 import MarketItem from '@/components/MarketItem';
 import SellItemModal from '@/components/SellItemModal';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, FlatList, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type MarketType = 'item' | 'food' | 'service';
@@ -53,16 +54,27 @@ export default function MarketScreen() {
     } = useInfiniteQuery({
         queryKey: ['marketItems', activeSegment, selectedCategory, debouncedSearch, filters],
         queryFn: async ({ pageParam = 1 }) => {
-            const res = await marketAPI.getItems({
+            console.log('🛒 [Frontend] Fetching market items:', {
                 type: activeSegment,
-                category: selectedCategory !== 'All' ? selectedCategory : undefined,
-                search: debouncedSearch || undefined,
-                page: pageParam as number,
-                minPrice: filters.minPrice,
-                maxPrice: filters.maxPrice,
-                condition: filters.condition !== 'Any' ? filters.condition : undefined,
+                category: selectedCategory,
+                page: pageParam
             });
-            return res.data;
+            try {
+                const res = await marketAPI.getItems({
+                    type: activeSegment,
+                    category: selectedCategory !== 'All' ? selectedCategory : undefined,
+                    search: debouncedSearch || undefined,
+                    page: pageParam as number,
+                    minPrice: filters.minPrice,
+                    maxPrice: filters.maxPrice,
+                    condition: filters.condition !== 'Any' ? filters.condition : undefined,
+                });
+                console.log(`🛒 [Frontend] Fetched ${res.data.items?.length} items for page ${pageParam}`);
+                return res.data;
+            } catch (err: any) {
+                console.error('❌ [Frontend] Failed to fetch market items:', err.response?.data || err.message);
+                throw err;
+            }
         },
         initialPageParam: 1,
         getNextPageParam: (lastPage, allPages) => {
@@ -75,6 +87,10 @@ export default function MarketScreen() {
     });
 
     const items = data?.pages.flatMap(page => page.items) || [];
+    console.log(`🛒 [Frontend] Total items in market state: ${items.length}`);
+    if (items.length > 0) {
+        console.log('🛒 [Frontend] First item preview:', JSON.stringify(items[0], null, 2));
+    }
 
     // Active Orders Query
     const { data: orders = [], refetch: refetchOrders } = useQuery({
@@ -96,9 +112,21 @@ export default function MarketScreen() {
                 refetchOrders();
             });
 
+            socket.on('market:itemCreated', (data: any) => {
+                console.log('📡 [MARKET] Real-time: New item created, refetching market');
+                refetch();
+            });
+
+            socket.on('market:itemUpdated', (data: any) => {
+                console.log('📡 [MARKET] Real-time: Item updated/purchased, refetching market');
+                refetch();
+            });
+
             return () => {
-                console.log('📡 [MARKET] Cleaning up socket listener');
+                console.log('📡 [MARKET] Cleaning up socket listeners');
                 socket.off('order:statusUpdate');
+                socket.off('market:itemCreated');
+                socket.off('market:itemUpdated');
             };
         }
     }, [refetchOrders]);
@@ -125,14 +153,15 @@ export default function MarketScreen() {
 
     const fadeAnim = React.useRef(new Animated.Value(1)).current;
 
-    React.useEffect(() => {
-        fadeAnim.setValue(0);
-        Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-        }).start();
-    }, [activeSegment]);
+    // Temporarily disabled animation for debugging
+    // React.useEffect(() => {
+    //     fadeAnim.setValue(0);
+    //     Animated.timing(fadeAnim, {
+    //         toValue: 1,
+    //         duration: 300,
+    //         useNativeDriver: true,
+    //     }).start();
+    // }, [activeSegment]);
 
     // ... existing helper functions
 
@@ -180,43 +209,49 @@ export default function MarketScreen() {
                 </TouchableOpacity>
             </View>
 
-            <Animated.FlatList
+            <FlatList
                 data={items}
                 keyExtractor={(item) => item._id || item.id}
-                renderItem={({ item }) => <MarketItem item={item} />}
+                renderItem={({ item, index }) => {
+                    console.log(`🛒 [Frontend] Rendering item at index ${index}:`, item?._id || item?.id);
+                    return <MarketItem item={item} />;
+                }}
                 numColumns={2}
                 columnWrapperStyle={styles.row}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
-                style={{ opacity: fadeAnim }}
+                style={styles.flatList}
                 refreshing={isRefetching}
                 onRefresh={onRefresh}
-                ListHeaderComponent={() => (
-                    <View style={styles.categoriesContainer}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            <View style={styles.categories}>
-                                {categories[activeSegment].map((cat) => (
-                                    <TouchableOpacity
-                                        key={cat}
-                                        onPress={() => setSelectedCategory(cat)}
-                                        style={[
-                                            styles.categoryChip,
-                                            { borderColor: colors.border },
-                                            selectedCategory === cat && { backgroundColor: colors.primary, borderColor: colors.primary }
-                                        ]}
-                                    >
-                                        <Text style={[
-                                            styles.categoryText,
-                                            { color: selectedCategory === cat ? '#fff' : colors.subtext }
-                                        ]}>
-                                            {cat}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </ScrollView>
-                    </View>
-                )}
+                ListHeaderComponent={() => {
+                    console.log('🛒 [Frontend] Rendering ListHeaderComponent');
+                    return (
+                        <View style={styles.categoriesContainer}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                <View style={styles.categories}>
+                                    {categories[activeSegment].map((cat) => (
+                                        <TouchableOpacity
+                                            key={cat}
+                                            onPress={() => setSelectedCategory(cat)}
+                                            style={[
+                                                styles.categoryChip,
+                                                { borderColor: colors.border },
+                                                selectedCategory === cat && { backgroundColor: colors.primary, borderColor: colors.primary }
+                                            ]}
+                                        >
+                                            <Text style={[
+                                                styles.categoryText,
+                                                { color: selectedCategory === cat ? '#fff' : colors.subtext }
+                                            ]}>
+                                                {cat}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </ScrollView>
+                        </View>
+                    );
+                }}
                 ListEmptyComponent={() => (
                     isLoading ? null : (
                         <View style={styles.emptyContainer}>
@@ -446,6 +481,9 @@ const styles = StyleSheet.create({
         flex: 1,
         marginLeft: 8,
         fontSize: 16,
+    },
+    flatList: {
+        flex: 1,
     },
     listContent: {
         paddingHorizontal: 16,

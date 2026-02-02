@@ -1,4 +1,5 @@
 import CustomLoader from '@/components/CustomLoader';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlert } from '@/context/AlertContext';
@@ -14,7 +15,6 @@ import {
     KeyboardAvoidingView,
     Platform,
     StyleSheet,
-    Text,
     TextInput,
     TouchableOpacity,
     View
@@ -47,7 +47,7 @@ export default function ChatScreen() {
     const [inputText, setInputText] = useState('');
     const [isOnline, setIsOnline] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
-    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const typingTimeoutRef = useRef<any>(null);
 
     const { user: currentUser } = useAuth();
     const { startCall } = useCall();
@@ -196,6 +196,15 @@ export default function ChatScreen() {
 
 
 
+    const getInitials = (name: string) => {
+        if (!name) return 'U';
+        const parts = name.split(' ').filter(p => p.length > 0);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return parts[0] ? parts[0][0].toUpperCase() : 'U';
+    };
+
     const handleCall = () => {
         if (!otherUser) return;
         console.log('📞 [ChatScreen] Starting call with user:', otherUser);
@@ -325,9 +334,23 @@ export default function ChatScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => router.push(`/user/${otherUser._id}`)} style={styles.userInfo}>
-                    <Image source={{ uri: otherUser.avatar }} style={styles.headerAvatar} />
-                    <View>
-                        <Text style={[styles.headerName, { color: colors.text }]}>{otherUser.name}</Text>
+                    {otherUser.avatar && !otherUser.avatar.includes('pravatar.cc') ? (
+                        <Image source={{ uri: otherUser.avatar }} style={styles.headerAvatar} />
+                    ) : (
+                        <View style={[styles.headerAvatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
+                            <Text style={[styles.initialsText, { color: colors.primary, fontSize: 14 }]}>
+                                {getInitials(otherUser.name)}
+                            </Text>
+                        </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                        <Text
+                            style={[styles.headerName, { color: colors.text }]}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                        >
+                            {otherUser.name}
+                        </Text>
                         <View style={styles.statusRow}>
                             {isTyping ? (
                                 <Text style={[styles.typingText, { color: colors.primary }]}>typing...</Text>
@@ -418,6 +441,13 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
+    },
+    initialsContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    initialsText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
     },
     headerName: {
         fontSize: 16,

@@ -1,3 +1,4 @@
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
@@ -9,7 +10,6 @@ import {
     Dimensions,
     Image,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View
 } from 'react-native';

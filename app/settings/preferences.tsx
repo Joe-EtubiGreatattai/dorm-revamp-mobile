@@ -1,11 +1,12 @@
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useHaptics } from '@/context/HapticsContext';
-import { useThemeHandlers } from '@/context/ThemeContext';
+import { useFontSize, useThemeHandlers } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import React from 'react';
-import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function AppPreferences() {
@@ -13,11 +14,10 @@ export default function AppPreferences() {
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
     const { setTheme, themePreference } = useThemeHandlers();
+    const { fontSize, setFontSize } = useFontSize();
     const { hapticsEnabled, setHapticsEnabled, triggerHaptic } = useHaptics();
 
-
-
-    const renderOption = (label: string, value: string, selected: boolean, onSelect: () => void) => (
+    const renderOption = (label: string, selected: boolean, onSelect: () => void) => (
         <TouchableOpacity
             style={[styles.optionRow, { borderBottomColor: colors.border }]}
             onPress={onSelect}
@@ -42,17 +42,18 @@ export default function AppPreferences() {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
 
                 <Text style={[styles.sectionTitle, { color: colors.subtext }]}>Appearance</Text>
-                <View style={[styles.section, { backgroundColor: colors.card }]}>
-                    {renderOption('System Default', 'System', themePreference === 'system', () => setTheme('system'))}
-                    {renderOption('Light Mode', 'Light', themePreference === 'light', () => setTheme('light'))}
-                    {renderOption('Dark Mode', 'Dark', themePreference === 'dark', () => setTheme('dark'))}
-                    <View style={styles.optionRow}>
-                        <Text style={[styles.optionLabel, { color: colors.text }]}>Midnight Theme (OLED)</Text>
-                        <Switch trackColor={{ false: colors.border, true: colors.primary }} />
-                    </View>
+                <View style={[styles.section, { backgroundColor: colors.card, marginBottom: 24 }]}>
+                    {renderOption('System Default', themePreference === 'system', () => setTheme('system'))}
+                    {renderOption('Light Mode', themePreference === 'light', () => setTheme('light'))}
+                    {renderOption('Dark Mode', themePreference === 'dark', () => setTheme('dark'))}
                 </View>
 
-
+                <Text style={[styles.sectionTitle, { color: colors.subtext }]}>Font Size</Text>
+                <View style={[styles.section, { backgroundColor: colors.card }]}>
+                    {renderOption('Small', fontSize === 'small', () => setFontSize('small'))}
+                    {renderOption('Medium (Default)', fontSize === 'medium', () => setFontSize('medium'))}
+                    {renderOption('Large', fontSize === 'large', () => setFontSize('large'))}
+                </View>
 
                 <Text style={[styles.sectionTitle, { color: colors.subtext, marginTop: 24 }]}>Interaction</Text>
                 <View style={[styles.section, { backgroundColor: colors.card }]}>

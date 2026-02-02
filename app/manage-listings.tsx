@@ -1,16 +1,19 @@
+import CustomDropdown from '@/components/CustomDropdown';
 import CustomLoader from '@/components/CustomLoader';
 import SellItemModal from '@/components/SellItemModal';
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
 import { marketAPI, orderAPI } from '@/utils/apiClient';
+import { getSocket } from '@/utils/socket';
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
-import { FlatList, Image, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Helper to format currency
 const formatCurrency = (amount: number) => {
@@ -28,6 +31,7 @@ export default function ManageListingsScreen() {
     const [editItem, setEditItem] = useState<any>(null);
     const [isEditModalVisible, setEditModalVisible] = useState(false);
     const [orderUpdates, setOrderUpdates] = useState<Record<string, { status?: string; eta?: string }>>({});
+    const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
     // Fetch user items
     const { data: myItems = [], isLoading: loadingItems, refetch: refetchItems } = useQuery({
@@ -55,6 +59,28 @@ export default function ManageListingsScreen() {
             else refetchOrders();
         }, [activeTab])
     );
+
+    // Socket listeners for real-time updates
+    useEffect(() => {
+        const socket = getSocket();
+
+        // Listen for order cancellations (seller receives this)
+        socket.on('order:cancelled', (data: any) => {
+            console.log('📢 Order cancelled:', data);
+            refetchOrders();
+        });
+
+        // Listen for order status updates (buyer receives this, but seller might want to know too)
+        socket.on('order:statusUpdate', (data: any) => {
+            console.log('📢 Order status updated:', data);
+            refetchOrders();
+        });
+
+        return () => {
+            socket.off('order:cancelled');
+            socket.off('order:statusUpdate');
+        };
+    }, []);
 
     const handleDeleteItem = (id: string, title: string) => {
         showAlert({
@@ -99,6 +125,7 @@ export default function ManageListingsScreen() {
 
     const updateOrder = async (orderId: string) => {
         console.log('🔄 [UPDATE] Starting order update for:', orderId);
+        setUpdatingOrderId(orderId);
         try {
             const updates = orderUpdates[orderId];
             console.log('🔄 [UPDATE] Updates to apply:', updates);
@@ -142,6 +169,8 @@ export default function ManageListingsScreen() {
                 description: 'Failed to update order',
                 type: 'error'
             });
+        } finally {
+            setUpdatingOrderId(null);
         }
     };
 
@@ -205,45 +234,65 @@ export default function ManageListingsScreen() {
                             <Text style={[styles.buyerLabel, { color: colors.subtext }]}>Buyer: </Text>
                             <Text style={[styles.buyerName, { color: colors.text }]}>{item.buyerId?.name || 'Unknown'}</Text>
                         </View>
+                        {item.status === 'cancelled' && (
+                            <View style={[styles.cancelledBadge, { backgroundColor: colors.error + '20', borderColor: colors.error }]}>
+                                <Ionicons name="close-circle" size={16} color={colors.error} />
+                                <Text style={[styles.cancelledText, { color: colors.error }]}>CANCELLED</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
 
                 {/* ETA Input */}
-                <View style={styles.managementSection}>
-                    <Text style={[styles.fieldLabel, { color: colors.text }]}>ETA</Text>
-                    <TextInput
-                        style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                        placeholder="e.g., 30 mins, 2 hours"
-                        placeholderTextColor={colors.subtext}
-                        value={currentETA}
-                        onChangeText={(text) => handleETAChange(item._id, text)}
-                    />
-                </View>
+                {item.status !== 'cancelled' && (
+                    <View style={styles.managementSection}>
+                        <CustomDropdown
+                            label="ETA"
+                            value={currentETA || ''}
+                            options={[
+                                { label: '15 minutes', value: '15 mins', icon: 'flash-outline', color: '#10b981' },
+                                { label: '30 minutes', value: '30 mins', icon: 'time-outline', color: '#3b82f6' },
+                                { label: '1 hour', value: '1 hour', icon: 'hourglass-outline', color: '#6366f1' },
+                                { label: '2 hours', value: '2 hours', icon: 'hourglass-outline', color: '#8b5cf6' },
+                                { label: '3-4 hours', value: '3-4 hours', icon: 'calendar-outline', color: '#f59e0b' },
+                                { label: 'Same day', value: 'Same day', icon: 'today-outline', color: '#ec4899' },
+                                { label: 'Next day', value: 'Next day', icon: 'calendar-outline', color: '#ef4444' },
+                            ]}
+                            onSelect={(value) => handleETAChange(item._id, value)}
+                            placeholder="Select delivery time"
+                        />
+                    </View>
+                )}
 
                 {/* Status Picker */}
-                <View style={styles.managementSection}>
-                    <Text style={[styles.fieldLabel, { color: colors.text }]}>Status</Text>
-                    <View style={[styles.pickerContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                        <Picker
-                            selectedValue={currentStatus}
-                            onValueChange={(value: string) => handleStatusChange(item._id, value)}
-                            style={{ color: colors.text }}
-                        >
-                            <Picker.Item label="Pending" value="pending" />
-                            <Picker.Item label="Processing" value="processing" />
-                            <Picker.Item label="Shipping" value="shipping" />
-                            <Picker.Item label="Delivered" value="delivered" />
-                        </Picker>
+                {item.status !== 'cancelled' && (
+                    <View style={styles.managementSection}>
+                        <CustomDropdown
+                            label="Status"
+                            value={currentStatus}
+                            options={[
+                                { label: 'Pending', value: 'pending', icon: 'time-outline', color: '#f59e0b' },
+                                { label: 'Processing', value: 'processing', icon: 'sync-outline', color: '#3b82f6' },
+                                { label: 'Shipping', value: 'shipping', icon: 'airplane-outline', color: '#6366f1' },
+                                { label: 'Delivered', value: 'delivered', icon: 'checkmark-circle-outline', color: '#10b981' },
+                            ]}
+                            onSelect={(value) => handleStatusChange(item._id, value)}
+                        />
                     </View>
-                </View>
+                )}
 
                 {/* Update Button */}
-                {hasChanges && (
+                {hasChanges && item.status !== 'cancelled' && (
                     <TouchableOpacity
-                        style={[styles.updateBtn, { backgroundColor: colors.primary }]}
+                        style={[styles.updateBtn, { backgroundColor: colors.primary, opacity: updatingOrderId === item._id ? 0.7 : 1 }]}
                         onPress={() => updateOrder(item._id)}
+                        disabled={updatingOrderId === item._id}
                     >
-                        <Text style={styles.updateBtnText}>Update Order</Text>
+                        {updatingOrderId === item._id ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                            <Text style={styles.updateBtnText}>Update Order</Text>
+                        )}
                     </TouchableOpacity>
                 )}
             </View>
@@ -251,8 +300,7 @@ export default function ManageListingsScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <Stack.Screen options={{ headerShown: false }} />
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <View style={[styles.header, { borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -511,5 +559,21 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontFamily: 'PlusJakartaSans_700Bold',
         fontSize: 14,
+    },
+    cancelledBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 6,
+        borderWidth: 1,
+        marginTop: 8,
+        alignSelf: 'flex-start',
+    },
+    cancelledText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 12,
+        letterSpacing: 0.5,
     },
 });

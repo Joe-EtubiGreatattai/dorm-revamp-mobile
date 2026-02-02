@@ -6,7 +6,7 @@ export { API_URL } from '../config/api';
 // Create axios instance with default config
 const apiClient = axios.create({
     baseURL: API_URL,
-    timeout: 10000,
+    timeout: 30000, // Increased to 30s for image uploads
     headers: {
         'Content-Type': 'application/json',
     },
@@ -106,12 +106,24 @@ export const authAPI = {
 
     toggleMonetization: () => apiClient.post('/auth/monetization/toggle'),
 
+    submitKyc: (data: any) =>
+        apiClient.put('/auth/kyc', data, {
+            headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined
+        }),
+
     // Utils
     uploadImage: async (fileUri: string) => {
         const formData = new FormData();
-        const filename = fileUri.split('/').pop() || 'image.jpg';
+        const filename = fileUri.split('/').pop() || 'file.jpg';
         const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        const ext = match ? match[1].toLowerCase() : 'jpg';
+
+        let type = 'image/jpeg';
+        if (['mp4', 'mov', 'm4v', 'avi'].includes(ext)) {
+            type = `video/${ext === 'mov' ? 'quicktime' : 'mp4'}`;
+        } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+            type = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+        }
 
         // @ts-ignore
         formData.append('image', {
@@ -122,6 +134,7 @@ export const authAPI = {
 
         const response = await apiClient.post('/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 60000,
         });
         return response.data.url;
     },
@@ -175,7 +188,8 @@ export const postAPI = {
 
     createPost: (data: any) =>
         apiClient.post('/posts', data, {
-            headers: (data && typeof data.append === 'function') ? { 'Content-Type': 'multipart/form-data' } : undefined
+            headers: (data && typeof data.append === 'function') ? { 'Content-Type': 'multipart/form-data' } : undefined,
+            timeout: 60000 // 60 seconds specifically for post creation with images
         }),
 
     updatePost: (id: string, data: { content?: string; images?: string[]; visibility?: string }) =>
@@ -198,6 +212,12 @@ export const postAPI = {
 
     notInterested: (id: string) =>
         apiClient.post(`/posts/${id}/not-interested`),
+
+    incrementView: (id: string) =>
+        apiClient.post(`/posts/${id}/view`),
+
+    getVideos: (page = 1, limit = 10) =>
+        apiClient.get(`/posts/videos?page=${page}&limit=${limit}`),
 };
 
 // ============ COMMENT ENDPOINTS ============
@@ -458,6 +478,15 @@ export const supportAPI = {
         apiClient.post(`/support/tickets/${id}/message`, data),
 
     closeTicket: (id: string) => apiClient.put(`/support/tickets/${id}/close`),
+};
+
+// ============ REVIEW ENDPOINTS ============
+export const reviewAPI = {
+    submitReview: (data: { targetId: string; targetType: 'vendor' | 'housing' | 'material'; rating: number; content?: string }) =>
+        apiClient.post('/reviews', data),
+
+    getVendorReviews: (vendorId: string) =>
+        apiClient.get(`/reviews/vendor/${vendorId}`),
 };
 
 export default apiClient;

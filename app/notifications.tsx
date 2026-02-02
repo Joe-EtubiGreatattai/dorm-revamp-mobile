@@ -1,3 +1,4 @@
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { getSocket } from '@/utils/socket';
@@ -10,7 +11,6 @@ import {
     FlatList,
     RefreshControl,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View
 } from 'react-native';
@@ -183,6 +183,15 @@ export default function NotificationsScreen() {
         }
     };
 
+    const getInitials = (name: string) => {
+        if (!name) return 'U';
+        const parts = name.split(' ').filter(p => p.length > 0);
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase();
+        }
+        return parts[0] ? parts[0][0].toUpperCase() : 'U';
+    };
+
     const filteredNotifications = notifications.filter(notif => {
         if (activeFilter === 'Likes') return notif.type === 'like';
         if (activeFilter === 'Mentions') return notif.type === 'comment';
@@ -219,7 +228,15 @@ export default function NotificationsScreen() {
             >
                 <View style={styles.avatarContainer}>
                     {item.user ? (
-                        <Image source={{ uri: item.user.avatar || 'https://ui-avatars.com/api/?name=User' }} style={styles.avatar} />
+                        item.user.avatar ? (
+                            <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
+                        ) : (
+                            <View style={[styles.avatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
+                                <Text style={[styles.initialsText, { color: colors.primary, fontSize: 18 }]}>
+                                    {getInitials(item.user.name)}
+                                </Text>
+                            </View>
+                        )
                     ) : (
                         <View style={[styles.systemIcon, { backgroundColor: colors.card }]}>
                             <Ionicons name={icon.name as any} size={20} color={icon.color} />
@@ -234,7 +251,15 @@ export default function NotificationsScreen() {
 
                 <View style={styles.contentContainer}>
                     <Text style={[styles.contentText, { color: colors.text }]}>
-                        {item.user && <Text style={styles.userName}>{item.user.name} </Text>}
+                        {item.user && (
+                            <Text
+                                style={styles.userName}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                            >
+                                {item.user.name}{' '}
+                            </Text>
+                        )}
                         {item.content}
                     </Text>
                     <Text style={[styles.timestamp, { color: colors.subtext }]}>
@@ -395,6 +420,13 @@ const styles = StyleSheet.create({
         height: 48,
         borderRadius: 24,
     },
+    initialsContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    initialsText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+    },
     systemIcon: {
         width: 48,
         height: 48,
@@ -424,6 +456,7 @@ const styles = StyleSheet.create({
     },
     userName: {
         fontFamily: 'PlusJakartaSans_700Bold',
+        maxWidth: '100%',
     },
     timestamp: {
         fontFamily: 'PlusJakartaSans_500Medium',
