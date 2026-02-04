@@ -72,6 +72,7 @@ const AuthContext = createContext<AuthContextType>({
     logout: async () => { },
     refreshUser: async () => { },
     completeOnboarding: async () => { },
+    token: null,
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -104,8 +105,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     // Fetch user info - we don't block isLoading on this if we want fastest splash hide,
                     // but we need the user object for initial routing. Let's parallelize the rest.
                     const { data } = await authAPI.getMe();
-                    // Non-blocking initialization - Init socket first so effect can pick it up
-                    initSocket(token);
+                    // Non-blocking initialization - Init socket with correct token
+                    initSocket(storedToken);
                     setUser(data);
 
                     registerForPushNotificationsAsync().catch(err =>

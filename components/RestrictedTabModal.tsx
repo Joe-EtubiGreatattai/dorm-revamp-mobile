@@ -38,13 +38,17 @@ export default function RestrictedTabModal() {
         else mappedTabName = currentTab;
 
         activeRestriction = checkRestriction(mappedTabName);
+
+        if (activeRestriction) {
+            console.log(`🛡️ [FRONTEND] Access BLOCKED for tab: ${mappedTabName}. Reason: ${activeRestriction.reason}`);
+        }
+    } else {
+        // Log if we are not inside tabs to understand why it might not show
+        // console.log('ℹ️ [FRONTEND] Not inside (tabs) segment:', segments[0]);
     }
 
-    // Logic to force navigation away OR just blocking cover?
-    // User asked for "cover that tab with blur background".
-    // So we show it if activeRestriction exists.
-
     if (!activeRestriction) return null;
+
 
     return (
         <View style={[styles.overlay, { bottom: tabBarHeight }]}>

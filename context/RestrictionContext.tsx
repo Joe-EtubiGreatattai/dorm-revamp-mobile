@@ -74,7 +74,7 @@ export const RestrictionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const { scope, targetId, filters } = restriction;
 
         // 1. Direct Scope Checks
-        if (scope === 'school' && currentUser.schoolId !== targetId) return false;
+        if (scope === 'school' && currentUser.university !== targetId) return false;
         if (scope === 'user' && currentUser._id !== targetId) return false;
 
         // 2. Filter Checks (if any)
@@ -115,37 +115,74 @@ export const RestrictionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     // Socket listeners
     useEffect(() => {
         const socket = getSocket();
-        if (!socket || !user) return;
+        if (!socket || !user) {
+            console.log('🔇 [FRONTEND] Socket or user not available for restrictions');
+            return;
+        }
+
+        console.log('🔌 [FRONTEND] Attaching restriction listeners for user:', user.name);
 
         const handleRestrictionActive = (data: any) => {
-            console.log('🚫 [RESTRICTION] Active:', data);
+            console.log('\n📥 [FRONTEND] Received restriction:active event');
+            console.log('   Data:', JSON.stringify(data, null, 2));
+            console.log('   Current user:', user?.name, '(', user?._id, ')');
+            console.log('   User university:', user?.university);
 
-            if (doesRestrictionApply(data, user)) {
+            const applies = doesRestrictionApply(data, user);
+            console.log('   Does restriction apply to this user?', applies);
+
+            if (applies) {
                 setRestrictions(prev => {
-                    // Avoid duplicates
-                    const exists = prev.find(r => r.tab === data.tab && r.scope === data.scope && JSON.stringify(r.filters) === JSON.stringify(data.filters));
-                    if (exists) return prev;
+                    // Avoid duplicates - Check tab, scope, targetId AND filters
+                    const exists = prev.find(r =>
+                        r.tab === data.tab &&
+                        r.scope === data.scope &&
+                        r.targetId === data.targetId &&
+                        JSON.stringify(r.filters) === JSON.stringify(data.filters)
+                    );
+
+                    if (exists) {
+                        console.log('   ⚠️ Restriction already exists in state, skipping');
+                        return prev;
+                    }
+                    console.log('   ✅ Adding restriction to state. New count:', prev.length + 1);
                     return [...prev, data];
                 });
+            } else {
+                console.log('   ❌ Restriction does not apply to this user, ignoring\n');
             }
         };
 
         const handleRestrictionLifted = (data: any) => {
-            console.log('✅ [RESTRICTION] Lifted:', data);
+            console.log('\n📥 [FRONTEND] Received restriction:lifted event');
+            console.log('   Data:', JSON.stringify(data, null, 2));
+
             // Relaxed matching for lifting to ensure cleanup
-            setRestrictions(prev => prev.filter(r =>
-                !(r.tab === data.tab && r.scope === data.scope && (r.targetId === data.targetId || !r.targetId))
-            ));
+            setRestrictions(prev => {
+                const initialCount = prev.length;
+                const filtered = prev.filter(r =>
+                    !(r.tab === data.tab && r.scope === data.scope && (r.targetId === data.targetId || !r.targetId || !data.targetId))
+                );
+
+                if (filtered.length < initialCount) {
+                    console.log(`   ✅ Removed ${initialCount - filtered.length} restriction(s). New count:`, filtered.length);
+                } else {
+                    console.log('   ⚠️ No matching restriction found to lift');
+                }
+                return filtered;
+            });
         };
 
         socket.on('restriction:active', handleRestrictionActive);
         socket.on('restriction:lifted', handleRestrictionLifted);
 
         return () => {
+            console.log('🔌 [FRONTEND] Detaching restriction listeners');
             socket.off('restriction:active', handleRestrictionActive);
             socket.off('restriction:lifted', handleRestrictionLifted);
         };
-    }, [user]);
+    }, [user, user?.university, user?.walletBalance]); // React to user changes to re-bind or re-evaluate
+
 
     // Initial Filter Check on Load
     // We also need to filter the INITIAL fetched restrictions list because the API might return global ones that have filters we need to check on client side.
