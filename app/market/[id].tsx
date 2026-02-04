@@ -3,6 +3,7 @@ import CustomLoader from '@/components/CustomLoader';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { marketAPI } from '@/utils/apiClient';
+import { getSocket } from '@/utils/socket';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -72,6 +73,21 @@ export default function MarketItemDetail() {
             }
         };
         fetchItem();
+
+        // Socket listener for real-time updates
+        const socket = getSocket();
+        if (socket) {
+            socket.on('market:itemUpdated', (updatedItem: any) => {
+                if (updatedItem._id === id) {
+                    console.log('📡 [ITEM DETAIL] Real-time: Item updated', updatedItem._id);
+                    setItem(updatedItem);
+                }
+            });
+
+            return () => {
+                socket.off('market:itemUpdated');
+            };
+        }
     }, [id]);
 
     if (isLoading) {
@@ -105,9 +121,14 @@ export default function MarketItemDetail() {
         if (isPurchasing) return;
         setIsPurchasing(true);
         try {
-            // Attempt purchase
-            const { data } = await marketAPI.purchaseItem(item._id || id);
-            handlePurchaseSuccess(data);
+            if (item.isFreeMerch) {
+                const { data } = await marketAPI.claimFreeMerch(item._id || id);
+                handlePurchaseSuccess(data);
+            } else {
+                // Attempt purchase
+                const { data } = await marketAPI.purchaseItem(item._id || id);
+                handlePurchaseSuccess(data);
+            }
         } catch (error: any) {
             console.log('Purchase error:', error);
 
@@ -139,7 +160,7 @@ export default function MarketItemDetail() {
     };
 
     const handleChat = () => {
-        router.push(`/chat/dm_${seller.id}`);
+        router.push(`/chat/dm_${seller.id}?marketItemId=${item._id}`);
     };
 
     const handleShare = async () => {
@@ -212,7 +233,9 @@ export default function MarketItemDetail() {
                     <View style={styles.headerInfo}>
                         <Text style={[styles.category, { color: colors.primary }]}>{item.category}</Text>
                         <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
-                        <Text style={[styles.price, { color: colors.text }]}>₦{item.price.toLocaleString()}</Text>
+                        <Text style={[styles.price, { color: item.isFreeMerch ? colors.success : colors.text }]}>
+                            {item.isFreeMerch ? 'FREE' : `₦${item.price.toLocaleString()}`}
+                        </Text>
                     </View>
 
                     <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -266,13 +289,13 @@ export default function MarketItemDetail() {
                 <TouchableOpacity
                     style={[
                         styles.buyBtn,
-                        { backgroundColor: isOwner ? colors.border : colors.primary }
+                        { backgroundColor: isOwner ? colors.border : (item.isFreeMerch ? colors.success : colors.primary) }
                     ]}
                     onPress={handleBuy}
                     disabled={isOwner}
                 >
                     <Text style={[styles.buyBtnText, { color: isOwner ? colors.subtext : '#fff' }]}>
-                        {isOwner ? 'Your Listing' : 'Buy Now'}
+                        {isOwner ? 'Your Listing' : (item.isFreeMerch ? 'Claim Free' : 'Buy Now')}
                     </Text>
                 </TouchableOpacity>
             </SafeAreaView>
@@ -281,9 +304,11 @@ export default function MarketItemDetail() {
                 visible={isBuyConfirmVisible}
                 onClose={() => setBuyConfirmVisible(false)}
                 onConfirm={confirmPurchase}
-                title="Confirm Purchase"
-                description={`Are you sure you want to buy ${item.title} for ₦${item.price.toLocaleString()}?`}
-                buttonText="Confirm"
+                title={item.isFreeMerch ? "Claim Free Merch" : "Confirm Purchase"}
+                description={item.isFreeMerch
+                    ? `Are you sure you want to claim ${item.title} for free? You can only claim free merch once.`
+                    : `Are you sure you want to buy ${item.title} for ₦${item.price.toLocaleString()}?`}
+                buttonText={item.isFreeMerch ? "Claim Now" : "Confirm"}
                 showCancel={true}
                 iconName="cart"
                 isLoading={isPurchasing}

@@ -1,9 +1,11 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
+import AILoader from '@/components/AILoader';
+import AISummaryModal from '@/components/AISummaryModal';
 import CustomLoader from '@/components/CustomLoader';
 import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { libraryAPI } from '@/utils/apiClient';
+import { aiAPI, libraryAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,6 +29,13 @@ export default function MaterialReader() {
     const [isMenuVisible, setMenuVisible] = useState(false);
     const [isModalVisible, setModalVisible] = useState(false);
     const [modalConfig, setModalConfig] = useState({ title: '', description: '', icon: 'checkmark-circle' as any, color: '#0ea5e9' });
+
+    const [isAiLoading, setIsAiLoading] = useState(false);
+    const [aiSummary, setAiSummary] = useState<string | null>(null);
+    const [aiQuestions, setAiQuestions] = useState<any[] | null>(null);
+    const [showAiSummary, setShowAiSummary] = useState(false);
+    const [showAiCBT, setShowAiCBT] = useState(false);
+    const [generatedCbtId, setGeneratedCbtId] = useState<string | null>(null);
 
     // Pagination Logic
     const PAGE_SIZE = 1800; // Character count per page
@@ -98,6 +107,72 @@ export default function MaterialReader() {
         }
     }, [id]);
 
+    const handleGetSummary = async () => {
+        setMenuVisible(false);
+
+        // Use existing summary if available
+        if (material?.aiSummary) {
+            setAiSummary(material.aiSummary);
+            setShowAiSummary(true);
+            return;
+        }
+
+        const materialId = Array.isArray(id) ? id[0] : (id as string);
+        setIsAiLoading(true);
+        try {
+            const { data } = await aiAPI.summarize({ materialId });
+            setAiSummary(data.summary);
+            setShowAiSummary(true);
+        } catch (error) {
+            console.error('Error generating summary:', error);
+            setModalConfig({
+                title: 'Summary Failed',
+                description: 'We couldn\'t generate a summary at this time. Please try again later.',
+                icon: 'alert-circle',
+                color: '#ef4444'
+            });
+            setModalVisible(true);
+        } finally {
+            setIsAiLoading(false);
+        }
+    };
+
+    const handleTakeCBT = async () => {
+        setMenuVisible(false);
+        setIsAiLoading(true);
+        const ids = Array.isArray(id) ? id[0] : (id as string);
+        try {
+            // 1. Check for existing CBT first
+            const { data: cbtData } = await libraryAPI.getCBTByMaterial(ids);
+            if (cbtData && cbtData._id) {
+                router.push({ pathname: '/library/cbt/[id]', params: { id: cbtData._id } });
+                setIsAiLoading(false);
+                return;
+            }
+        } catch (e) {
+            // No existing CBT, proceed to AI generation
+        }
+
+        // 2. Generate AI CBT if no manual one exists
+        try {
+            const { data } = await aiAPI.generateCBT({ materialId: ids, numQuestions: 15 });
+            setAiQuestions(data.questions);
+            setGeneratedCbtId(data.cbtId);
+            setShowAiCBT(true);
+        } catch (error) {
+            console.error('Error generating CBT:', error);
+            setModalConfig({
+                title: 'CBT Failed',
+                description: 'We couldn\'t generate practice questions at this time. Please try again later.',
+                icon: 'alert-circle',
+                color: '#ef4444'
+            });
+            setModalVisible(true);
+        } finally {
+            setIsAiLoading(false);
+        }
+    };
+
     if (isLoading) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -164,33 +239,7 @@ export default function MaterialReader() {
                         {/* Summary Modal Logic will be separate, but let's trigger it directly here or add a new state */}
                         <TouchableOpacity
                             style={styles.menuItem}
-                            onPress={async () => {
-                                setMenuVisible(false);
-                                const ids = Array.isArray(id) ? id[0] : id;
-                                try {
-                                    // Try to get linked CBT
-                                    const { data: cbtData } = await libraryAPI.getCBTByMaterial(ids);
-                                    if (cbtData && cbtData._id) {
-                                        router.push({ pathname: '/library/cbt/[id]', params: { id: cbtData._id } });
-                                    } else {
-                                        setModalConfig({
-                                            title: 'CBT Not Found',
-                                            description: 'No CBT practice available for this material yet.',
-                                            icon: 'information-circle',
-                                            color: '#fbbf24'
-                                        });
-                                        setModalVisible(true);
-                                    }
-                                } catch (e) {
-                                    setModalConfig({
-                                        title: 'CBT Not Found',
-                                        description: 'No CBT practice available for this material yet.',
-                                        icon: 'information-circle',
-                                        color: '#fbbf24'
-                                    });
-                                    setModalVisible(true);
-                                }
-                            }}
+                            onPress={handleTakeCBT}
                         >
                             <Ionicons name="school-outline" size={20} color={colors.text} />
                             <Text style={[styles.menuText, { color: colors.text }]}>Take CBT</Text>
@@ -200,35 +249,10 @@ export default function MaterialReader() {
 
                         <TouchableOpacity
                             style={styles.menuItem}
-                            onPress={async () => {
-                                setMenuVisible(false);
-                                setIsLoading(true); // Reuse loading or add new state
-                                try {
-                                    // Use extracted content for summarization
-                                    const textToSummarize = material.content || "No extracted content available for this document.";
-                                    const { data } = await libraryAPI.summarize({ text: textToSummarize });
-                                    setModalConfig({
-                                        title: 'Material Summary',
-                                        description: data.summary,
-                                        icon: 'sparkles',
-                                        color: colors.primary
-                                    });
-                                    setModalVisible(true);
-                                } catch (e) {
-                                    setModalConfig({
-                                        title: 'Summary Failed',
-                                        description: 'Failed to generate summary. Please try again later.',
-                                        icon: 'alert-circle',
-                                        color: '#ef4444'
-                                    });
-                                    setModalVisible(true);
-                                } finally {
-                                    setIsLoading(false);
-                                }
-                            }}
+                            onPress={handleGetSummary}
                         >
                             <Ionicons name="sparkles-outline" size={20} color={colors.text} />
-                            <Text style={[styles.menuText, { color: colors.text }]}>Get Summary</Text>
+                            <Text style={[styles.menuText, { color: colors.text }]}>{material?.aiSummary || aiSummary ? 'View Summary' : 'Get AI Summary'}</Text>
                         </TouchableOpacity>
                     </View>
                 </TouchableOpacity>
@@ -302,6 +326,47 @@ export default function MaterialReader() {
                     <Ionicons name="settings-outline" size={20} color={colors.text} />
                 </TouchableOpacity>
             </View>
+
+            {/* AI Summary Modal */}
+            <AISummaryModal
+                visible={showAiSummary}
+                onClose={() => setShowAiSummary(false)}
+                summary={aiSummary || ''}
+                onSave={() => {
+                    setShowAiSummary(false);
+                    setModalConfig({
+                        title: 'Summary Saved',
+                        description: 'This summary has been saved to the document for future reference.',
+                        icon: 'checkmark-circle',
+                        color: colors.primary
+                    });
+                    setModalVisible(true);
+                }}
+            />
+
+            {/* AI CBT Modal */}
+            <ActionSuccessModal
+                visible={showAiCBT}
+                onClose={() => setShowAiCBT(false)}
+                title="Practice Questions"
+                description={aiQuestions ? `Generated ${aiQuestions.length} questions for you. Ready to test yourself?` : ''}
+                buttonText="Start Practice"
+                onConfirm={() => {
+                    setShowAiCBT(false);
+                    router.push({
+                        pathname: "/library/cbt/[id]",
+                        params: {
+                            id: generatedCbtId || (Array.isArray(id) ? id[0] : (id as string)),
+                            questions: JSON.stringify(aiQuestions)
+                        }
+                    });
+                }}
+                showCancel={true}
+                cancelText="Later"
+                iconName="school"
+            />
+
+            <AILoader visible={isAiLoading} />
 
             <ActionSuccessModal
                 visible={isModalVisible}

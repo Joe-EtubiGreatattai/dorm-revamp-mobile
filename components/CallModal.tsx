@@ -4,7 +4,6 @@ import { useCall } from '@/context/CallContext';
 // import { USERS } from '@/constants/mockData';
 import { Text } from '@/components/Themed';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -116,7 +115,7 @@ export default function CallModal({ visible, onClose, user, status = 'outgoing',
     return (
         <Modal visible={visible} animationType="fade" transparent={true}>
             <View style={styles.container}>
-                <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.8)' }]} />
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
 
                 <View style={styles.content}>

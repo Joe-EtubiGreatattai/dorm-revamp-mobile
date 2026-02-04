@@ -1,4 +1,5 @@
 import Colors from '@/constants/Colors';
+import { useThrottledCallback } from '@/hooks/useThrottledCallback';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import { ResizeMode, Video } from 'expo-av';
@@ -52,13 +53,13 @@ export default function VideoPlayer({
         await videoRef.current.setIsMutedAsync(newMuted);
     };
 
-    const toggleFullscreen = () => {
+    const toggleFullscreen = useThrottledCallback(() => {
         if (postId) {
             router.push(`/reels?postId=${postId}`);
         } else if (videoRef.current) {
             videoRef.current.presentFullscreenPlayer();
         }
-    };
+    }, 1000);
 
     const handleVideoPress = () => {
         toggleFullscreen();

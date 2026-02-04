@@ -2,18 +2,20 @@ import CreatePostModal from '@/components/CreatePostModal';
 import PostCard from '@/components/PostCard';
 import PostSkeleton from '@/components/PostSkeleton';
 import { Text } from '@/components/Themed';
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
-import { API_URL, chatAPI, electionAPI, notificationAPI, orderAPI, postAPI } from '@/utils/apiClient';
+import { useThrottledCallback } from '@/hooks/useThrottledCallback';
+import { API_URL, chatAPI, notificationAPI, orderAPI, postAPI } from '@/utils/apiClient';
 import { getSocket } from '@/utils/socket';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 
 const UserAvatar = React.memo(({ user }: { user: any }) => {
   const getAvatarUri = (avatarPath?: string) => {
@@ -47,20 +49,13 @@ const UserAvatar = React.memo(({ user }: { user: any }) => {
 });
 
 export default function FeedScreen() {
+  const queryClient = useQueryClient();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { user } = useAuth();
-
   const [activeTab, setActiveTab] = useState<'All' | 'My'>('All');
   const [modalVisible, setModalVisible] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [posts, setPosts] = useState<any[]>([]);
-  const [stats, setStats] = useState({ elections: 0, orders: 0, notifications: 0, messages: 0 });
-  const [isLoading, setIsLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [viewablePostId, setViewablePostId] = useState<string | null>(null);
 
   const onViewableItemsChanged = React.useRef(({ viewableItems }: any) => {
@@ -73,109 +68,148 @@ export default function FeedScreen() {
     itemVisiblePercentThreshold: 50
   }).current;
 
-  const fetchData = React.useCallback(async (isInitial = false, pageNum = 1) => {
-    if (isInitial) setIsLoading(true);
-    if (pageNum > 1) setIsLoadingMore(true);
-    try {
-      const [postsRes, notifRes, ordersRes, electionsRes, messagesRes] = await Promise.all([
-        postAPI.getFeed(pageNum),
-        notificationAPI.getNotifications(),
-        orderAPI.getOrders(),
-        electionAPI.getElections(),
-        chatAPI.getUnreadCount()
-      ]);
+  // --- Queries ---
 
-      if (pageNum === 1) {
-        setPosts(postsRes.data.posts);
-      } else {
-        setPosts(prev => [...prev, ...postsRes.data.posts]);
-      }
+  // 1. Posts (Infinite Scroll)
+  const {
+    data: postsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isPostsLoading,
+    refetch: refetchPosts,
+    isRefetching: isPostsRefetching
+  } = useInfiniteQuery({
+    queryKey: ['posts', activeTab],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await postAPI.getFeed(pageParam as number, 20, activeTab);
+      return res.data;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.currentPage < lastPage.totalPages) return lastPage.currentPage + 1;
+      return undefined;
+    },
+  });
 
-      setTotalPages(postsRes.data.totalPages);
-      setPage(postsRes.data.currentPage);
-      setStats({
-        notifications: notifRes.data.filter((n: any) => !n.isRead).length,
-        orders: ordersRes.data.filter((o: any) => o.status !== 'delivered').length,
-        elections: electionsRes.data.filter((e: any) => e.status === 'active').length,
-        messages: messagesRes.data.count
-      });
-    } catch (error) {
-      console.log('Error fetching feed data:', error);
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
+  const posts = postsData?.pages.flatMap(page => page.posts) || [];
+
+  // 2. Notifications Count
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const res = await notificationAPI.getNotifications();
+      return res.data;
     }
-  }, []);
+  });
 
+  // 3. Orders
+  const { data: orders = [] } = useQuery({
+    queryKey: ['orders'],
+    queryFn: async () => {
+      const res = await orderAPI.getOrders();
+      return res.data;
+    }
+  });
+
+  // 4. Messages Count
+  const { data: messagesShot } = useQuery({
+    queryKey: ['unreadChat'],
+    queryFn: async () => {
+      const res = await chatAPI.getUnreadCount();
+      return res.data;
+    }
+  });
+
+  const stats = {
+    notifications: notifications.filter((n: any) => !n.isRead).length,
+    orders: orders.filter((o: any) => o.status !== 'delivered').length,
+    messages: messagesShot?.count || 0
+  };
+
+  // --- Socket Listeners ---
   React.useEffect(() => {
-    fetchData(true);
-
-    // Socket listeners for real-time updates
     const socket = getSocket();
+    if (!socket) return;
 
     socket.on('post:new', (newPost: any) => {
-      setPosts(prevPosts => [newPost, ...prevPosts]);
+      // Optimistically update the cache for the current tab
+      queryClient.setQueryData(['posts', activeTab], (oldData: any) => {
+        if (!oldData) return oldData;
+        const newFirstPage = {
+          ...oldData.pages[0],
+          posts: [newPost, ...oldData.pages[0].posts]
+        };
+        return {
+          ...oldData,
+          pages: [newFirstPage, ...oldData.pages.slice(1)]
+        };
+      });
     });
 
     socket.on('post:updated', (updatedPost: any) => {
-      setPosts(prevPosts => prevPosts.map(p => p._id === updatedPost._id ? updatedPost : p));
-    });
-
-    socket.on('notification:message', () => {
-      setStats(prev => ({ ...prev, messages: prev.messages + 1 }));
-    });
-
-    socket.on('notification:unreadCount', (count: number) => {
-      setStats(prev => ({ ...prev, notifications: count }));
+      queryClient.setQueryData(['posts', activeTab], (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            posts: page.posts.map((p: any) => p._id === updatedPost._id ? updatedPost : p)
+          }))
+        };
+      });
     });
 
     socket.on('notification:new', () => {
-      setStats(prev => ({ ...prev, notifications: prev.notifications + 1 }));
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    });
+
+    socket.on('notification:message', () => {
+      queryClient.invalidateQueries({ queryKey: ['unreadChat'] });
     });
 
     return () => {
       socket.off('post:new');
       socket.off('post:updated');
-      socket.off('notification:message');
-      socket.off('notification:unreadCount');
       socket.off('notification:new');
+      socket.off('notification:message');
     };
-  }, [fetchData]);
+  }, [queryClient, activeTab]);
 
   const onRefresh = React.useCallback(async () => {
-    setRefreshing(true);
-    setPage(1);
-    await fetchData(false, 1);
-    setRefreshing(false);
-  }, [fetchData]);
+    await Promise.all([
+      refetchPosts(),
+      queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+      queryClient.invalidateQueries({ queryKey: ['orders'] }),
+      queryClient.invalidateQueries({ queryKey: ['unreadChat'] })
+    ]);
+  }, [refetchPosts, queryClient]);
 
   const loadMore = () => {
-    if (!isLoadingMore && page < totalPages) {
-      fetchData(false, page + 1);
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
     }
   };
 
-  const filteredPosts = posts.filter(post => {
-    if (activeTab === 'My') {
-      // My School tab: Show only posts from my school
-      return post.visibility === 'school' && post.school === user?.university;
-    }
-    // All tab: Show only public posts
-    return post.visibility === 'public';
-  });
+
+  const filteredPosts = posts;
 
 
+
+  const navigateToProfile = useThrottledCallback(() => router.push('/profile'), 1000);
+  const navigateToNotifications = useThrottledCallback(() => router.push('/notifications'), 1000);
+  const navigateToMessages = useThrottledCallback(() => router.push('/messages'), 1000);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Custom Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.push('/profile')}>
+        <TouchableOpacity onPress={navigateToProfile}>
           <UserAvatar user={user} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Dorm</Text>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/notifications')}>
+          <TouchableOpacity style={styles.iconBtn} onPress={navigateToNotifications}>
             <Ionicons name="notifications-outline" size={26} color={colors.text} />
             {stats.notifications > 0 && (
               <View style={[styles.badge, { backgroundColor: colors.primary }]}>
@@ -183,7 +217,7 @@ export default function FeedScreen() {
               </View>
             )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/messages')}>
+          <TouchableOpacity style={styles.iconBtn} onPress={navigateToMessages}>
             <Ionicons name="chatbubbles-outline" size={26} color={colors.text} />
             {stats.messages > 0 && (
               <View style={[styles.badge, { backgroundColor: colors.primary }]}>
@@ -211,16 +245,16 @@ export default function FeedScreen() {
       </View>
 
       <FlatList
-        data={isLoading ? [1, 2, 3] : filteredPosts}
+        data={isPostsLoading ? [1, 2, 3] : filteredPosts}
         extraData={posts}
-        keyExtractor={(item, index) => isLoading ? `skeleton-${index}` : item._id}
-        renderItem={({ item }) => isLoading ? <PostSkeleton /> : <PostCard post={item} isViewable={item._id === viewablePostId} />}
+        keyExtractor={(item, index) => isPostsLoading ? `skeleton-${index}` : item._id}
+        renderItem={({ item }) => isPostsLoading ? <PostSkeleton /> : <PostCard post={item} isViewable={item._id === viewablePostId} />}
         contentContainerStyle={styles.feedContent}
         showsVerticalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         ListEmptyComponent={
-          !isLoading ? (
+          !isPostsLoading ? (
             <View style={styles.emptyContainer}>
               <View style={[styles.emptyIllustration, { backgroundColor: colors.card }]}>
                 <Ionicons name="chatbubble-ellipses-outline" size={60} color={colors.primary} />
@@ -239,12 +273,12 @@ export default function FeedScreen() {
           ) : null
         }
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          <RefreshControl refreshing={isPostsRefetching} onRefresh={onRefresh} tintColor={colors.primary} />
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
-          isLoadingMore ? (
+          isFetchingNextPage ? (
             <View style={styles.footerLoader}>
               <PostSkeleton />
             </View>

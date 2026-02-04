@@ -14,6 +14,7 @@ import { useAlert } from '@/context/AlertContext';
 import { useRouter } from 'expo-router';
 import { Share } from 'react-native';
 
+import { useThrottledCallback } from '@/hooks/useThrottledCallback';
 import { postAPI } from '@/utils/apiClient';
 import CreatePostModal from './CreatePostModal';
 
@@ -132,9 +133,13 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
     const handleShare = async (e: any) => {
         e.stopPropagation();
         try {
+            const shareUrl = `https://dorm.app/post/${post._id}`;
+            const shareMessage = `${post.content}\n\nView on Dorm: ${shareUrl}`;
+
             const result = await Share.share({
-                message: post.content,
+                message: shareMessage,
                 title: 'Share Post',
+                url: shareUrl, // iOS will use this
             });
             if (result.action === Share.sharedAction) {
                 setSharesCount(prev => prev + 1);
@@ -156,9 +161,9 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
         }
     };
 
-    const handlePress = () => {
+    const handlePress = useThrottledCallback(() => {
         router.push(`/post/${post._id}`);
-    };
+    }, 1000);
 
 
     const handleNotInterested = async () => {
@@ -235,7 +240,7 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
         return parts[0] ? parts[0][0].toUpperCase() : 'U';
     };
 
-    const handleProfilePress = (e: any) => {
+    const handleProfilePress = useThrottledCallback((e: any) => {
         e.stopPropagation();
         if (post.user?._id && post.user._id !== 'anonymous') {
             if (currentUser?._id === post.user._id) {
@@ -244,7 +249,7 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
                 router.push(`/user/${post.user._id}`);
             }
         }
-    };
+    }, 1000);
 
     if (!isVisible) return null;
 

@@ -8,7 +8,7 @@ export default {
     tint: tintColorLight,
     tabIconDefault: '#94a3b8',
     tabIconSelected: tintColorLight,
-    card: '#ffffff',
+    card: '#f1f5f9',
     border: '#f1f5f9',
     subtext: '#64748b',
     primary: '#ff4d00',

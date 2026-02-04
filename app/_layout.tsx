@@ -13,6 +13,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 const queryClient = new QueryClient();
@@ -120,15 +121,17 @@ function RootLayoutNav({ fontsLoaded }: { fontsLoaded: boolean }) {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true }} />
-        <Stack.Screen name="manage-listings" />
-        <Stack.Screen name="settings/support_chat" />
-      </Stack>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <StatusBar style="auto" />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true }} />
+          <Stack.Screen name="manage-listings" />
+          <Stack.Screen name="settings/support_chat" />
+        </Stack>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

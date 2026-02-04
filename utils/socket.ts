@@ -4,7 +4,19 @@ import { API_URL } from '../config/api';
 let socket: Socket | null = null;
 
 export const initSocket = (token?: string) => {
-    if (socket) return socket;
+    if (socket) {
+        if (token && socket.auth) {
+            (socket.auth as any).token = token;
+            if (socket.connected) {
+                // If already connected, we might need to disconnect/reconnect to apply new token
+                // depending on server setup, but usually updating auth and connecting works.
+                socket.disconnect().connect();
+            } else {
+                socket.connect();
+            }
+        }
+        return socket;
+    }
 
     // Remove '/api' from URL if present for socket connection
     const socketUrl = API_URL.replace('/api', '');
@@ -16,9 +28,15 @@ export const initSocket = (token?: string) => {
     });
 
     socket.on('connect', () => {
+        console.log('🔌 [Socket] Connected successfully with ID:', socket?.id);
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
+        console.log('🔌 [Socket] Disconnected. Reason:', reason);
+    });
+
+    socket.on('connect_error', (error) => {
+        console.log('🔌 [Socket] Connection Error:', error.message);
     });
 
     return socket;

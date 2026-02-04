@@ -152,7 +152,9 @@ export default function NotificationsScreen() {
                     });
                     break;
                 }
-                if (notification.relatedId) {
+                if (notification.relatedId === 'admin_broadcast' || !notification.relatedId) {
+                    router.push({ pathname: '/notification/[id]', params: { id: notification._id || notification.id } });
+                } else if (notification.relatedId) {
                     router.push({ pathname: '/listing/[id]', params: { id: notification.relatedId } });
                 }
                 break;

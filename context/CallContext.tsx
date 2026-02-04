@@ -2,6 +2,7 @@ import CallModal from '@/components/CallModal';
 import { useAuth } from '@/context/AuthContext';
 import { getSocket, initSocket } from '@/utils/socket';
 import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
@@ -89,6 +90,18 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
     const [remoteStream, setRemoteStream] = useState<any | null>(null);
     const [isMuted, setIsMuted] = useState(false);
 
+    // Refs for accessing latest state in socket listeners
+    const activeCallUserRef = useRef<User | null>(null);
+    const isVideoRef = useRef(false);
+
+    useEffect(() => {
+        activeCallUserRef.current = activeCallUser;
+    }, [activeCallUser]);
+
+    useEffect(() => {
+        isVideoRef.current = isVideo;
+    }, [isVideo]);
+
     const peerConnection = useRef<any | null>(null);
 
     useEffect(() => {
@@ -101,6 +114,21 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
             cleanup();
         };
     }, [user]);
+
+    useEffect(() => {
+        // Handle background notification taps
+        const subscription = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
+            const data = response.notification.request.content.data;
+            if (data?.type === 'call_incoming') {
+                console.log('📞 [CallContext] Notification tapped, answering call data:', data);
+                setActiveCallUser(data.caller as User);
+                setIsVideo(data.isVideo as boolean);
+                setCallState('incoming');
+            }
+        });
+
+        return () => subscription.remove();
+    }, []);
 
     const initSocketAndListeners = async () => {
         const token = await SecureStore.getItemAsync('token');
@@ -119,6 +147,7 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('call:accepted', async ({ responderId }) => {
             console.log('📞 [CallContext] Call accepted by:', responderId);
             setCallState('connected');
+            await initiateWebRTC();
         });
 
         socket.on('call:declined', () => {
@@ -205,7 +234,7 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
                 console.log('📞 [CallContext] Sending ICE candidate');
                 const socket = getSocket();
                 socket?.emit('call:ice-candidate', {
-                    to: activeCallUser?._id,
+                    to: activeCallUserRef.current?._id,
                     candidate: event.candidate
                 });
             }
@@ -225,18 +254,22 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
         setCallState('outgoing');
         setIsVideo(video);
 
-        // Emit call:start for signaling (works in Expo Go)
+        // Emit call:start for signaling
         const socket = getSocket();
         socket?.emit('call:start', { receiverId: targetUser._id, isVideo: video });
+    };
 
+    const initiateWebRTC = async () => {
         // Skip WebRTC setup if in Expo Go
         if (isExpoGo || !RTCPeerConnection) {
             console.warn('⚠️ [CallContext] WebRTC not available - audio/video disabled');
             return;
         }
 
+        console.log('📞 [CallContext] Initiating WebRTC connection...');
+
         // Get local media
-        const stream = await setupLocalMedia(video);
+        const stream = await setupLocalMedia(isVideoRef.current);
         if (!stream) {
             cleanup();
             return;
@@ -253,13 +286,14 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             const offer = await pc.createOffer({
                 offerToReceiveAudio: true,
-                offerToReceiveVideo: video
+                offerToReceiveVideo: isVideoRef.current
             });
             await pc.setLocalDescription(offer);
 
             console.log('📞 [CallContext] Sending offer');
+            const socket = getSocket();
             socket?.emit('call:offer', {
-                to: targetUser._id,
+                to: activeCallUserRef.current?._id,
                 offer: offer
             });
         } catch (error) {
@@ -274,7 +308,7 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
         console.log('📞 [CallContext] Handling incoming offer');
 
         // Get local media
-        const stream = await setupLocalMedia(isVideo);
+        const stream = await setupLocalMedia(isVideoRef.current);
         if (!stream) return;
 
         // Create peer connection
@@ -289,7 +323,7 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
             console.log('📞 [CallContext] Sending answer');
             const socket = getSocket();
             socket?.emit('call:answer', {
-                to: activeCallUser?._id,
+                to: activeCallUserRef.current?._id,
                 answer: answer
             });
         } catch (error) {

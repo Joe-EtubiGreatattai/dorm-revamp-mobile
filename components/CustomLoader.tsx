@@ -1,59 +1,29 @@
-import { Text } from '@/components/Themed';
-import Colors from '@/constants/Colors';
-import React, { useEffect } from 'react';
-import { ActivityIndicator, Animated, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useColorScheme } from './useColorScheme';
 
-export default function CustomLoader({ message = "Loading..." }: { message?: string }) {
+export default function CustomLoader({ message }: { message?: string }) {
     const colorScheme = useColorScheme();
-    const colors = Colors[colorScheme ?? 'light'];
-    const fadeAnim = React.useRef(new Animated.Value(0.3)).current;
-    const scaleAnim = React.useRef(new Animated.Value(0.8)).current;
-
-    useEffect(() => {
-        const pulse = Animated.loop(
-            Animated.parallel([
-                Animated.sequence([
-                    Animated.timing(fadeAnim, {
-                        toValue: 1,
-                        duration: 1000,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(fadeAnim, {
-                        toValue: 0.3,
-                        duration: 1000,
-                        useNativeDriver: true,
-                    }),
-                ]),
-                Animated.sequence([
-                    Animated.timing(scaleAnim, {
-                        toValue: 1.1,
-                        duration: 1000,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(scaleAnim, {
-                        toValue: 0.8,
-                        duration: 1000,
-                        useNativeDriver: true,
-                    }),
-                ]),
-            ])
-        );
-        pulse.start();
-        return () => pulse.stop();
-    }, []);
+    const isDark = colorScheme === 'dark';
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-                {/* Replace with your app logo if available, strictly using branding colors */}
-                <View style={[styles.logoPlaceholder, { backgroundColor: colors.primary }]}>
-                    <Text style={styles.logoText}>D</Text>
-                </View>
-            </Animated.View>
-            <View style={{ marginTop: 40, alignItems: 'center' }}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[styles.message, { color: colors.subtext, marginTop: 16 }]}>{message}</Text>
+        <View style={[styles.container]}>
+            {/* Blur view providing the actual blur effect */}
+            {/* Fallback for BlurView which sometimes causes registry errors */}
+            <View
+                style={[
+                    StyleSheet.absoluteFill,
+                    { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }
+                ]}
+            />
+
+            <View style={styles.content}>
+                <Image
+                    source={require('@/assets/images/icon.png')}
+                    style={styles.logo}
+                    contentFit="cover"
+                />
             </View>
         </View>
     );
@@ -64,35 +34,26 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 999,
+        zIndex: 9999,
+        // Ensure background is transparent so BlurView can see through
+        backgroundColor: 'transparent',
     },
     content: {
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    logoPlaceholder: {
-        width: 80,
-        height: 80,
-        borderRadius: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
+        // Removed padding/radius from container to let image define the shape
         shadowColor: "#000",
         shadowOffset: {
             width: 0,
             height: 4,
         },
-        shadowOpacity: 0.30,
-        shadowRadius: 4.65,
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
         elevation: 8,
     },
-    logoText: {
-        fontSize: 40,
-        color: '#fff',
-        fontWeight: 'bold',
-        fontFamily: 'PlusJakartaSans_800ExtraBold',
-    },
-    message: {
-        fontFamily: 'PlusJakartaSans_600SemiBold',
-        fontSize: 14,
+    logo: {
+        width: 120,
+        height: 120,
+        borderRadius: 60, // Circular
     }
 });

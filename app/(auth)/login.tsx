@@ -30,6 +30,7 @@ export default function LoginScreen() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [banInfo, setBanInfo] = useState<{ isBanned: boolean; reason?: string; email?: string } | null>(null);
 
     const handleLogin = async () => {
         if (!email || !password) return;
@@ -39,11 +40,15 @@ export default function LoginScreen() {
             router.replace('/(tabs)');
         } catch (e: any) {
             console.error(e);
-            showAlert({
-                title: 'Login Failed',
-                description: e.message || 'Please check your credentials and try again.',
-                type: 'error'
-            });
+            if (e.message.toLowerCase().includes('banned')) {
+                setBanInfo({ isBanned: true, reason: e.message, email });
+            } else {
+                showAlert({
+                    title: 'Login Failed',
+                    description: e.message || 'Please check your credentials and try again.',
+                    type: 'error'
+                });
+            }
         } finally {
             setIsLoading(false);
         }
@@ -73,13 +78,17 @@ export default function LoginScreen() {
                         type: 'error'
                     });
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.log('Biometric login error:', error);
-                showAlert({
-                    title: 'Login Error',
-                    description: 'Could not retrieve credentials. Please login manually.',
-                    type: 'error'
-                });
+                if (error.message.toLowerCase().includes('banned')) {
+                    setBanInfo({ isBanned: true, reason: error.message });
+                } else {
+                    showAlert({
+                        title: 'Login Error',
+                        description: 'Could not retrieve credentials. Please login manually.',
+                        type: 'error'
+                    });
+                }
             }
         }
     };
@@ -176,6 +185,37 @@ export default function LoginScreen() {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* Ban Modal */}
+            {banInfo && (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+                    <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+                        <Ionicons name="alert-circle" size={60} color="#ef4444" />
+                        <Text style={[styles.modalTitle, { color: colors.text }]}>Account Banned</Text>
+                        <Text style={[styles.modalDescription, { color: colors.subtext }]}>
+                            {banInfo.reason}
+                        </Text>
+                        <TouchableOpacity
+                            style={[styles.appealBtn, { backgroundColor: colors.primary }]}
+                            onPress={() => {
+                                setBanInfo(null);
+                                router.push({
+                                    pathname: '/(auth)/appeal' as any,
+                                    params: { email: banInfo.email }
+                                });
+                            }}
+                        >
+                            <Text style={styles.appealBtnText}>Appeal this ban</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.closeBtn}
+                            onPress={() => setBanInfo(null)}
+                        >
+                            <Text style={[styles.closeBtnText, { color: colors.subtext }]}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
         </SafeAreaView>
     );
 }
@@ -299,5 +339,43 @@ const styles = StyleSheet.create({
     footerLink: {
         fontFamily: 'PlusJakartaSans_700Bold',
         fontSize: 15,
+    },
+    modalContent: {
+        width: '100%',
+        borderRadius: 24,
+        padding: 32,
+        alignItems: 'center',
+        gap: 16,
+    },
+    modalTitle: {
+        fontFamily: 'PlusJakartaSans_800ExtraBold',
+        fontSize: 24,
+        textAlign: 'center',
+    },
+    modalDescription: {
+        fontFamily: 'PlusJakartaSans_500Medium',
+        fontSize: 16,
+        textAlign: 'center',
+        lineHeight: 24,
+        marginBottom: 8,
+    },
+    appealBtn: {
+        height: 56,
+        width: '100%',
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    appealBtnText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 16,
+        color: '#fff',
+    },
+    closeBtn: {
+        padding: 12,
+    },
+    closeBtnText: {
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+        fontSize: 14,
     },
 });

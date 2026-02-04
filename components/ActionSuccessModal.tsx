@@ -3,7 +3,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { ActivityIndicator, Dimensions, Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 const { height } = Dimensions.get('window');
 
@@ -62,9 +62,11 @@ export default function ActionSuccessModal({
                     </View>
 
                     <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-                    <Text style={[styles.description, { color: colors.subtext }]}>
-                        {description}
-                    </Text>
+                    <ScrollView style={{ width: '100%', marginBottom: 32 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center' }}>
+                        <Text style={[styles.description, { color: colors.subtext, marginBottom: 0 }]}>
+                            {description}
+                        </Text>
+                    </ScrollView>
 
                     <View style={styles.buttonContainer}>
                         {showCancel && (
@@ -100,7 +102,7 @@ export default function ActionSuccessModal({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: 'rgba(0,0,0,0.75)',
         justifyContent: 'flex-end',
     },
     dismissArea: {

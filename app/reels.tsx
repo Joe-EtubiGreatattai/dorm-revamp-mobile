@@ -64,9 +64,13 @@ const ReelItem = React.memo(({ item, isActive, isMuted, toggleMute, onVideoEnd, 
 
     const handleShare = async () => {
         try {
+            const shareUrl = `https://dorm.app/reel/${item._id}`;
+            const shareMessage = `${item.content}\n\nWatch on Dorm: ${shareUrl}`;
+
             await Share.share({
-                message: item.content,
-                url: item.video
+                message: shareMessage,
+                title: 'Share Reel',
+                url: shareUrl, // iOS will use this
             });
             await postAPI.sharePost(item._id);
         } catch (error) { }
@@ -377,112 +381,113 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
                         </TouchableOpacity>
                     </View>
 
-                    <FlatList
-                        data={comments}
-                        keyExtractor={item => item._id}
-                        renderItem={({ item }) => {
-                            const isCommentAuthor = currentUser?._id === (item.userId?._id || item.userId);
-                            // For reels, the post author is item.user in ReelItem, but we don't have it here easily
-                            // Let's assume we can't easily check isPostAuthor without passing post author prop
-                            return (
-                                <View style={styles.commentItemContainer}>
-                                    <View style={styles.commentItem}>
-                                        <Image
-                                            source={{ uri: (item.user?.avatar || item.userId?.avatar) || 'https://ui-avatars.com/api/?name=' + ((item.user?.name || item.userId?.name) || 'U') }}
-                                            style={styles.commentAvatar}
-                                        />
-                                        <View style={styles.commentTextContainer}>
-                                            <Text style={styles.commentUser}>{(item.user?.name || item.userId?.name) || 'Anonymous'}</Text>
-                                            <Text style={styles.commentText}>{item.content}</Text>
-
-                                            <View style={styles.commentActions}>
-                                                <TouchableOpacity
-                                                    style={styles.commentAction}
-                                                    onPress={() => handleLikeComment(item._id)}
-                                                >
-                                                    <Ionicons
-                                                        name={item.likes?.includes(currentUser?._id) ? "heart" : "heart-outline"}
-                                                        size={14}
-                                                        color={item.likes?.includes(currentUser?._id) ? "#ff2d55" : "#666"}
-                                                    />
-                                                    <Text style={styles.commentActionText}>{item.likes?.length || 0}</Text>
-                                                </TouchableOpacity>
-
-                                                <TouchableOpacity style={styles.commentAction} onPress={() => startReply(item)}>
-                                                    <Text style={styles.commentActionText}>Reply</Text>
-                                                </TouchableOpacity>
-
-                                                {isCommentAuthor && (
-                                                    <TouchableOpacity style={styles.commentAction} onPress={() => handleDeleteComment(item._id)}>
-                                                        <Ionicons name="trash-outline" size={14} color="#999" />
-                                                    </TouchableOpacity>
-                                                )}
-                                            </View>
-                                        </View>
-                                    </View>
-
-                                    {/* Replies */}
-                                    {item.replies && item.replies.map((reply: any) => (
-                                        <View key={reply._id} style={styles.replyItem}>
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                        style={{ flex: 1 }}
+                    >
+                        <FlatList
+                            data={comments}
+                            keyExtractor={item => item._id}
+                            renderItem={({ item }) => {
+                                const isCommentAuthor = currentUser?._id === (item.userId?._id || item.userId);
+                                // For reels, the post author is item.user in ReelItem, but we don't have it here easily
+                                // Let's assume we can't easily check isPostAuthor without passing post author prop
+                                return (
+                                    <View style={styles.commentItemContainer}>
+                                        <View style={styles.commentItem}>
                                             <Image
-                                                source={{ uri: (reply.user?.avatar || reply.userId?.avatar) || 'https://ui-avatars.com/api/?name=' + ((reply.user?.name || reply.userId?.name) || 'U') }}
-                                                style={styles.replyAvatar}
+                                                source={{ uri: (item.user?.avatar || item.userId?.avatar) || 'https://ui-avatars.com/api/?name=' + ((item.user?.name || item.userId?.name) || 'U') }}
+                                                style={styles.commentAvatar}
                                             />
                                             <View style={styles.commentTextContainer}>
-                                                <Text style={styles.commentUser}>{(reply.user?.name || reply.userId?.name) || 'Anonymous'}</Text>
-                                                <Text style={styles.commentText}>{reply.content}</Text>
+                                                <Text style={styles.commentUser}>{(item.user?.name || item.userId?.name) || 'Anonymous'}</Text>
+                                                <Text style={styles.commentText}>{item.content}</Text>
+
                                                 <View style={styles.commentActions}>
                                                     <TouchableOpacity
                                                         style={styles.commentAction}
-                                                        onPress={() => handleLikeComment(reply._id)}
+                                                        onPress={() => handleLikeComment(item._id)}
                                                     >
                                                         <Ionicons
-                                                            name={reply.likes?.includes(currentUser?._id) ? "heart" : "heart-outline"}
-                                                            size={12}
-                                                            color={reply.likes?.includes(currentUser?._id) ? "#ff2d55" : "#666"}
+                                                            name={item.likes?.includes(currentUser?._id) ? "heart" : "heart-outline"}
+                                                            size={14}
+                                                            color={item.likes?.includes(currentUser?._id) ? "#ff2d55" : "#666"}
                                                         />
-                                                        <Text style={styles.commentActionText}>{reply.likes?.length || 0}</Text>
+                                                        <Text style={styles.commentActionText}>{item.likes?.length || 0}</Text>
                                                     </TouchableOpacity>
-                                                    {currentUser?._id === (reply.userId?._id || reply.userId) && (
-                                                        <TouchableOpacity style={styles.commentAction} onPress={() => handleDeleteComment(reply._id)}>
-                                                            <Ionicons name="trash-outline" size={12} color="#999" />
+
+                                                    <TouchableOpacity style={styles.commentAction} onPress={() => startReply(item)}>
+                                                        <Text style={styles.commentActionText}>Reply</Text>
+                                                    </TouchableOpacity>
+
+                                                    {isCommentAuthor && (
+                                                        <TouchableOpacity style={styles.commentAction} onPress={() => handleDeleteComment(item._id)}>
+                                                            <Ionicons name="trash-outline" size={14} color="#999" />
                                                         </TouchableOpacity>
                                                     )}
                                                 </View>
                                             </View>
                                         </View>
-                                    ))}
-                                </View>
-                            );
-                        }}
-                        style={styles.commentList}
-                        ListEmptyComponent={
-                            isFetching ? (
-                                <View style={styles.loaderContainer}>
-                                    <ActivityIndicator size="small" color={colors.primary} />
-                                    <Text style={[styles.loadingText, { color: colors.subtext }]}>Loading comments...</Text>
-                                </View>
-                            ) : (
-                                <Text style={styles.emptyComments}>No comments yet. Be the first to comment!</Text>
-                            )
-                        }
-                    />
 
-                    {replyingTo && (
-                        <View style={styles.replyingToBar}>
-                            <Text style={styles.replyingToText}>
-                                Replying to <Text style={{ fontWeight: '700' }}>@{replyingTo.userId?.name}</Text>
-                            </Text>
-                            <TouchableOpacity onPress={() => setReplyingTo(null)}>
-                                <Ionicons name="close-circle" size={18} color="#999" />
-                            </TouchableOpacity>
-                        </View>
-                    )}
+                                        {/* Replies */}
+                                        {item.replies && item.replies.map((reply: any) => (
+                                            <View key={reply._id} style={styles.replyItem}>
+                                                <Image
+                                                    source={{ uri: (reply.user?.avatar || reply.userId?.avatar) || 'https://ui-avatars.com/api/?name=' + ((reply.user?.name || reply.userId?.name) || 'U') }}
+                                                    style={styles.replyAvatar}
+                                                />
+                                                <View style={styles.commentTextContainer}>
+                                                    <Text style={styles.commentUser}>{(reply.user?.name || reply.userId?.name) || 'Anonymous'}</Text>
+                                                    <Text style={styles.commentText}>{reply.content}</Text>
+                                                    <View style={styles.commentActions}>
+                                                        <TouchableOpacity
+                                                            style={styles.commentAction}
+                                                            onPress={() => handleLikeComment(reply._id)}
+                                                        >
+                                                            <Ionicons
+                                                                name={reply.likes?.includes(currentUser?._id) ? "heart" : "heart-outline"}
+                                                                size={12}
+                                                                color={reply.likes?.includes(currentUser?._id) ? "#ff2d55" : "#666"}
+                                                            />
+                                                            <Text style={styles.commentActionText}>{reply.likes?.length || 0}</Text>
+                                                        </TouchableOpacity>
+                                                        {currentUser?._id === (reply.userId?._id || reply.userId) && (
+                                                            <TouchableOpacity style={styles.commentAction} onPress={() => handleDeleteComment(reply._id)}>
+                                                                <Ionicons name="trash-outline" size={12} color="#999" />
+                                                            </TouchableOpacity>
+                                                        )}
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </View>
+                                );
+                            }}
+                            style={styles.commentList}
+                            ListEmptyComponent={
+                                isFetching ? (
+                                    <View style={styles.loaderContainer}>
+                                        <ActivityIndicator size="small" color={colors.primary} />
+                                        <Text style={[styles.loadingText, { color: colors.subtext }]}>Loading comments...</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.emptyComments}>No comments yet. Be the first to comment!</Text>
+                                )
+                            }
+                        />
 
-                    <KeyboardAvoidingView
-                        behavior="padding"
-                        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-                    >
+                        {replyingTo && (
+                            <View style={styles.replyingToBar}>
+                                <Text style={styles.replyingToText}>
+                                    Replying to <Text style={{ fontWeight: '700' }}>@{replyingTo.userId?.name}</Text>
+                                </Text>
+                                <TouchableOpacity onPress={() => setReplyingTo(null)}>
+                                    <Ionicons name="close-circle" size={18} color="#999" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
                         <View style={styles.commentInputContainer}>
                             <TextInput
                                 ref={inputRef}

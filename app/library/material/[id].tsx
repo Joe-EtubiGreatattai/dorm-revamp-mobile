@@ -1,4 +1,6 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
+import AILoader from '@/components/AILoader';
+import AISummaryModal from '@/components/AISummaryModal';
 import CustomLoader from '@/components/CustomLoader';
 import ReviewModal from '@/components/ReviewModal';
 import { Text } from '@/components/Themed';
@@ -6,7 +8,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { SOCKET_URL } from '@/config/api';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
-import { libraryAPI } from '@/utils/apiClient';
+import { aiAPI, libraryAPI } from '@/utils/apiClient';
 import { getSocket } from '@/utils/socket';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -48,6 +50,12 @@ export default function MaterialDetail() {
     const [isLoading, setIsLoading] = useState(true);
     const [isImageLoading, setIsImageLoading] = useState(true);
     const [reviews, setReviews] = useState<any[]>([]);
+    const [aiSummary, setAiSummary] = useState<string | null>(null);
+    const [aiQuestions, setAiQuestions] = useState<any[] | null>(null);
+    const [isAiLoading, setIsAiLoading] = useState(false);
+    const [isSummaryVisible, setIsSummaryVisible] = useState(false);
+    const [isCBTVisible, setIsCBTVisible] = useState(false);
+    const [generatedCbtId, setGeneratedCbtId] = useState<string | null>(null);
 
     React.useEffect(() => {
         const fetchMaterial = async () => {
@@ -78,6 +86,7 @@ export default function MaterialDetail() {
 
                 console.log('[MaterialDetail] Mapped material for UI:', mappedMaterial);
                 setMaterial(mappedMaterial);
+                setAiSummary(data.aiSummary || null);
                 setReviews(data.reviews || []);
                 setIsSaved(data.saves?.includes(user?._id));
                 setIsDownloaded(data.downloaders?.includes(user?._id));
@@ -178,6 +187,47 @@ export default function MaterialDetail() {
                 description: 'We couldn\'t submit your review. Please try again later.'
             });
             setErrorModalVisible(true);
+        }
+    };
+
+    const handleSummarize = async () => {
+        if (aiSummary) {
+            setIsSummaryVisible(true);
+            return;
+        }
+        setIsAiLoading(true);
+        try {
+            const { data } = await aiAPI.summarize({ materialId: id as string });
+            setAiSummary(data.summary);
+            setIsSummaryVisible(true);
+        } catch (error) {
+            console.error('Error summarizing:', error);
+            setErrorMsg({
+                title: 'AI Summary Failed',
+                description: 'We couldn\'t generate a summary at this time. Please try again later.'
+            });
+            setErrorModalVisible(true);
+        } finally {
+            setIsAiLoading(false);
+        }
+    };
+
+    const handleGenerateCBT = async () => {
+        setIsAiLoading(true);
+        try {
+            const { data } = await aiAPI.generateCBT({ materialId: id as string, numQuestions: 15 });
+            setAiQuestions(data.questions);
+            setGeneratedCbtId(data.cbtId);
+            setIsCBTVisible(true);
+        } catch (error) {
+            console.error('Error generating CBT:', error);
+            setErrorMsg({
+                title: 'AI CBT Generation Failed',
+                description: 'We couldn\'t generate practice questions at this time. Please try again later.'
+            });
+            setErrorModalVisible(true);
+        } finally {
+            setIsAiLoading(false);
         }
     };
 
@@ -377,6 +427,27 @@ export default function MaterialDetail() {
                         </View>
                     </View>
 
+                    {/* AI Actions */}
+                    <View style={styles.aiActionRow}>
+                        <TouchableOpacity
+                            style={[styles.aiBtn, { backgroundColor: colors.primary + '10', borderColor: colors.primary }]}
+                            onPress={handleSummarize}
+                            disabled={isAiLoading}
+                        >
+                            <Ionicons name="sparkles" size={18} color={colors.primary} />
+                            <Text style={[styles.aiBtnText, { color: colors.primary }]}>{aiSummary ? 'View Summary' : 'AI Summary'}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.aiBtn, { backgroundColor: '#10b98110', borderColor: '#10b981' }]}
+                            onPress={handleGenerateCBT}
+                            disabled={isAiLoading}
+                        >
+                            <Ionicons name="school" size={18} color="#10b981" />
+                            <Text style={[styles.aiBtnText, { color: '#10b981' }]}>Test Me</Text>
+                        </TouchableOpacity>
+                    </View>
+
                     <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
                     {/* Uploader */}
@@ -508,6 +579,44 @@ export default function MaterialDetail() {
                 iconColor="#ef4444"
                 buttonText="Try Again"
             />
+
+            {/* AI Summary Modal */}
+            <AISummaryModal
+                visible={isSummaryVisible}
+                onClose={() => setIsSummaryVisible(false)}
+                summary={aiSummary || ''}
+                onSave={() => {
+                    // Summaries are auto-saved on generation now, 
+                    // but we can provide feedback here.
+                    setIsSummaryVisible(false);
+                    setSuccessModalVisible(true);
+                }}
+            />
+
+            {/* AI CBT Modal */}
+            <ActionSuccessModal
+                visible={isCBTVisible}
+                onClose={() => setIsCBTVisible(false)}
+                title="Practice Questions"
+                description={aiQuestions ? `Generated ${aiQuestions.length} questions for you. Ready to test yourself?` : ''}
+                buttonText="Start Practice"
+                onConfirm={() => {
+                    setIsCBTVisible(false);
+                    // Pass the generated questions to the CBT screen
+                    router.push({
+                        pathname: "/library/cbt/[id]",
+                        params: {
+                            id: generatedCbtId || (id as string),
+                            questions: JSON.stringify(aiQuestions)
+                        }
+                    });
+                }}
+                showCancel={true}
+                cancelText="Later"
+                iconName="school"
+            />
+
+            <AILoader visible={isAiLoading} />
         </SafeAreaView>
     );
 }
@@ -743,5 +852,24 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 2,
         marginTop: 2,
+    },
+    aiActionRow: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 8,
+    },
+    aiBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        gap: 8,
+    },
+    aiBtnText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 14,
     },
 });

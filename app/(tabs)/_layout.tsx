@@ -13,25 +13,65 @@ function TabBarIcon(props: {
   return <Ionicons size={24} style={{ marginBottom: -3 }} {...props} />;
 }
 
-import { electionAPI } from '@/utils/apiClient';
+import { chatAPI, electionAPI, marketAPI, notificationAPI, orderAPI, postAPI } from '@/utils/apiClient';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const activeColors = Colors[colorScheme ?? 'light'];
-  const [activeElectionsCount, setActiveElectionsCount] = React.useState(0);
+  const queryClient = useQueryClient();
 
+  // Prefetch data for all main tabs
   React.useEffect(() => {
-    const fetchElections = async () => {
-      try {
-        const { data } = await electionAPI.getElections();
-        const active = data.filter((e: any) => e.status === 'Open').length;
-        setActiveElectionsCount(active);
-      } catch (error) {
-        console.log('Error fetching elections count:', error);
-      }
-    };
-    fetchElections();
-  }, []);
+    // 1. Feed
+    queryClient.prefetchInfiniteQuery({
+      queryKey: ['posts', 'All'],
+      queryFn: async ({ pageParam = 1 }) => {
+        const res = await postAPI.getFeed(pageParam as number, 20, 'All');
+        return res.data;
+      },
+      initialPageParam: 1
+    });
+
+    // 2. Market (Default State)
+    const defaultFilters = { minPrice: '', maxPrice: '', condition: 'Any', onCampus: true, rating: 0 };
+    queryClient.prefetchInfiniteQuery({
+      queryKey: ['marketItems', 'item', 'All', '', defaultFilters],
+      queryFn: async ({ pageParam = 1 }) => {
+        const res = await marketAPI.getItems({
+          type: 'item',
+          category: undefined,
+          search: undefined,
+          page: pageParam as number,
+          minPrice: '',
+          maxPrice: '',
+          condition: undefined,
+        });
+        return res.data;
+      },
+      initialPageParam: 1
+    });
+
+    // 3. User Data
+    queryClient.prefetchQuery({ queryKey: ['notifications'], queryFn: () => notificationAPI.getNotifications().then(res => res.data) });
+    queryClient.prefetchQuery({ queryKey: ['orders'], queryFn: () => orderAPI.getOrders().then(res => res.data) });
+    queryClient.prefetchQuery({ queryKey: ['unreadChat'], queryFn: () => chatAPI.getUnreadCount().then(res => res.data) });
+
+  }, [queryClient]);
+
+  // Use Query for elections to keep it fresh
+  const { data: elections = [] } = useQuery({
+    queryKey: ['elections'],
+    queryFn: async () => {
+      const { data } = await electionAPI.getElections();
+      return data;
+    },
+    refetchInterval: 30000 // Refetch every 30s
+  });
+
+  const activeElectionsCount = Array.isArray(elections)
+    ? elections.filter((e: any) => e.status === 'Open').length
+    : 0;
 
   return (
     <Tabs

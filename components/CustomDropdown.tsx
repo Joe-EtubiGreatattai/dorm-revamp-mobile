@@ -3,7 +3,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
-import { Animated, Modal, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Animated, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 
 interface Option {
     label: string;
@@ -18,13 +18,15 @@ interface CustomDropdownProps {
     onSelect: (value: string) => void;
     placeholder?: string;
     label?: string;
+    searchPlaceholder?: string;
 }
 
-export default function CustomDropdown({ value, options, onSelect, placeholder = 'Select an option', label }: CustomDropdownProps) {
+export default function CustomDropdown({ value, options, onSelect, placeholder = 'Select an option', label, searchPlaceholder }: CustomDropdownProps) {
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
     const [visible, setVisible] = useState(false);
     const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+    const [searchText, setSearchText] = useState('');
     const buttonRef = useRef<View>(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -41,6 +43,7 @@ export default function CustomDropdown({ value, options, onSelect, placeholder =
         buttonRef.current?.measureInWindow((x: number, y: number, width: number, height: number) => {
             setPosition({ top: y + height + 8, left: x, width });
             setVisible(true);
+            setSearchText(''); // Reset search on open
             Animated.parallel([
                 Animated.timing(fadeAnim, {
                     toValue: 1,
@@ -77,6 +80,10 @@ export default function CustomDropdown({ value, options, onSelect, placeholder =
         closeDropdown();
     };
 
+    const filteredOptions = options.filter(opt =>
+        opt.label.toLowerCase().includes(searchText.toLowerCase())
+    );
+
     const selectedOption = options.find((opt) => opt.value === value);
 
     return (
@@ -92,7 +99,7 @@ export default function CustomDropdown({ value, options, onSelect, placeholder =
                     {selectedOption?.icon && (
                         <Ionicons name={selectedOption.icon} size={18} color={selectedOption.color || colors.text} style={{ marginRight: 8 }} />
                     )}
-                    <Text style={[styles.buttonText, { color: selectedOption ? colors.text : colors.subtext }]}>
+                    <Text numberOfLines={1} style={[styles.buttonText, { color: selectedOption ? colors.text : colors.subtext, flex: 1 }]}>
                         {selectedOption ? selectedOption.label : placeholder}
                     </Text>
                 </View>
@@ -113,41 +120,66 @@ export default function CustomDropdown({ value, options, onSelect, placeholder =
                                     borderColor: colors.border,
                                     opacity: fadeAnim,
                                     transform: [{ scale: scaleAnim }],
+                                    maxHeight: 300, // Limit height
                                 },
                             ]}
                         >
-                            {options.map((option, index) => (
-                                <TouchableOpacity
-                                    key={option.value}
-                                    style={[
-                                        styles.optionItem,
-                                        { borderBottomColor: colors.border },
-                                        index === options.length - 1 && { borderBottomWidth: 0 },
-                                        value === option.value && { backgroundColor: colors.primary + '10' }
-                                    ]}
-                                    onPress={() => handleSelect(option.value)}
-                                >
-                                    <View style={styles.optionContent}>
-                                        {option.icon && (
-                                            <Ionicons name={option.icon} size={18} color={option.color || colors.text} style={{ marginRight: 8 }} />
-                                        )}
-                                        <Text
+                            {/* Search Input */}
+                            <View style={[styles.searchContainer, { borderBottomColor: colors.border }]}>
+                                <Ionicons name="search" size={16} color={colors.subtext} style={{ marginRight: 8 }} />
+                                <TextInput
+                                    style={[styles.searchInput, { color: colors.text }]}
+                                    placeholder={searchPlaceholder || "Search..."}
+                                    placeholderTextColor={colors.subtext}
+                                    value={searchText}
+                                    onChangeText={setSearchText}
+                                />
+                            </View>
+
+                            <ScrollView
+                                nestedScrollEnabled
+                                keyboardShouldPersistTaps="handled"
+                                contentContainerStyle={{ paddingBottom: 8 }}
+                            >
+                                {filteredOptions.length > 0 ? (
+                                    filteredOptions.map((option, index) => (
+                                        <TouchableOpacity
+                                            key={option.value}
                                             style={[
-                                                styles.optionText,
-                                                {
-                                                    color: value === option.value ? colors.primary : colors.text,
-                                                    fontFamily: value === option.value ? 'PlusJakartaSans_700Bold' : 'PlusJakartaSans_500Medium'
-                                                }
+                                                styles.optionItem,
+                                                { borderBottomColor: colors.border },
+                                                index === filteredOptions.length - 1 && { borderBottomWidth: 0 },
+                                                value === option.value && { backgroundColor: colors.primary + '10' }
                                             ]}
+                                            onPress={() => handleSelect(option.value)}
                                         >
-                                            {option.label}
-                                        </Text>
+                                            <View style={styles.optionContent}>
+                                                {option.icon && (
+                                                    <Ionicons name={option.icon} size={18} color={option.color || colors.text} style={{ marginRight: 8 }} />
+                                                )}
+                                                <Text
+                                                    style={[
+                                                        styles.optionText,
+                                                        {
+                                                            color: value === option.value ? colors.primary : colors.text,
+                                                            fontFamily: value === option.value ? 'PlusJakartaSans_700Bold' : 'PlusJakartaSans_500Medium'
+                                                        }
+                                                    ]}
+                                                >
+                                                    {option.label}
+                                                </Text>
+                                            </View>
+                                            {value === option.value && (
+                                                <Ionicons name="checkmark" size={18} color={colors.primary} />
+                                            )}
+                                        </TouchableOpacity>
+                                    ))
+                                ) : (
+                                    <View style={styles.emptyState}>
+                                        <Text style={{ color: colors.subtext, fontSize: 13, fontFamily: 'PlusJakartaSans_500Medium' }}>No results found</Text>
                                     </View>
-                                    {value === option.value && (
-                                        <Ionicons name="checkmark" size={18} color={colors.primary} />
-                                    )}
-                                </TouchableOpacity>
-                            ))}
+                                )}
+                            </ScrollView>
                         </Animated.View>
                     </View>
                 </TouchableWithoutFeedback>
@@ -174,6 +206,8 @@ const styles = StyleSheet.create({
     selectedContent: {
         flexDirection: 'row',
         alignItems: 'center',
+        flex: 1,
+        marginRight: 8,
     },
     buttonText: {
         fontFamily: 'PlusJakartaSans_600SemiBold',
@@ -181,7 +215,7 @@ const styles = StyleSheet.create({
     },
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.2)', // Dim background slightly
+        backgroundColor: 'rgba(0,0,0,0.2)',
     },
     dropdown: {
         position: 'absolute',
@@ -194,6 +228,18 @@ const styles = StyleSheet.create({
         elevation: 8,
         overflow: 'hidden',
     },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        borderBottomWidth: 1,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 14,
+        fontFamily: 'PlusJakartaSans_500Medium',
+        padding: 0,
+    },
     optionItem: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -205,8 +251,13 @@ const styles = StyleSheet.create({
     optionContent: {
         flexDirection: 'row',
         alignItems: 'center',
+        flex: 1,
     },
     optionText: {
         fontSize: 14,
+    },
+    emptyState: {
+        padding: 16,
+        alignItems: 'center',
     },
 });

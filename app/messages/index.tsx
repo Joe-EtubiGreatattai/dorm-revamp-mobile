@@ -3,6 +3,7 @@ import CustomLoader from '@/components/CustomLoader';
 import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useThrottledCallback } from '@/hooks/useThrottledCallback';
 import { chatAPI } from '@/utils/apiClient';
 import { getSocket } from '@/utils/socket';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,13 +25,18 @@ export default function MessagesScreen() {
     const [isLoading, setIsLoading] = React.useState(true);
     const [refreshing, setRefreshing] = React.useState(false);
     const [typingUsers, setTypingUsers] = React.useState<{ [conversationId: string]: boolean }>({});
+    const [invitationsCount, setInvitationsCount] = React.useState(0);
 
     const fetchConversations = async () => {
         try {
-            const { data } = await chatAPI.getConversations();
-            setConversations(data);
+            const [convRes, invRes] = await Promise.all([
+                chatAPI.getConversations(),
+                chatAPI.getInvitations()
+            ]);
+            setConversations(convRes.data);
+            setInvitationsCount(invRes.data.filter((i: any) => i.status === 'pending').length);
         } catch (error) {
-            console.log('Error fetching conversations:', error);
+            console.log('Error fetching data:', error);
         } finally {
             setIsLoading(false);
         }
@@ -91,14 +97,33 @@ export default function MessagesScreen() {
             }
         };
 
+        const handleConversationUpdated = (updatedConv: any) => {
+            console.log('🔄 [Messages] Conversation updated:', updatedConv);
+            setConversations((prev) => {
+                return prev.map(c => {
+                    if (c.id === updatedConv.id || c._id === updatedConv.id) {
+                        return {
+                            ...c,
+                            groupMetadata: updatedConv.groupMetadata,
+                            participants: updatedConv.participants,
+                            admins: updatedConv.admins
+                        };
+                    }
+                    return c;
+                });
+            });
+        };
+
         socket.on('message:new', handleNewMessage);
         socket.on('notification:message', handleMessageNotification);
         socket.on('typing:indicator', handleTypingIndicator);
+        socket.on('conversation:updated', handleConversationUpdated);
 
         return () => {
             socket.off('message:new', handleNewMessage);
             socket.off('notification:message', handleMessageNotification);
             socket.off('typing:indicator', handleTypingIndicator);
+            socket.off('conversation:updated', handleConversationUpdated);
         };
     }, []);
 
@@ -108,10 +133,11 @@ export default function MessagesScreen() {
         setRefreshing(false);
     };
 
-    const filteredMessages = conversations.filter(dm =>
-        (dm.user?.name || 'User').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (dm.lastMessage || '').toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredMessages = conversations.filter(dm => {
+        const name = dm.type === 'group' ? dm.groupMetadata?.name : dm.user?.name;
+        return (name || 'User').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (dm.lastMessage || '').toLowerCase().includes(searchQuery.toLowerCase());
+    });
 
     const handleCreateMessage = () => {
         router.push('/messages/select-user');
@@ -133,24 +159,30 @@ export default function MessagesScreen() {
 
     const getInitials = (name: string) => {
         if (!name) return 'U';
-        const parts = name.split(' ').filter(p => p.length > 0);
+        const parts = name.trim().split(' ').filter(p => p.length > 0);
         if (parts.length >= 2) {
             return (parts[0][0] + parts[1][0]).toUpperCase();
         }
         return parts[0] ? parts[0][0].toUpperCase() : 'U';
     };
 
+    const handleConversationPress = useThrottledCallback((id: string) => {
+        router.push(`/chat/${id}`);
+    }, 1000);
+
     const renderItem = ({ item }: { item: any }) => {
         const isTyping = typingUsers[item.id];
-        const userName = item.user?.name || 'Unknown User';
+        const isGroup = item.type === 'group';
+        const userName = isGroup ? item.groupMetadata?.name : (item.user?.name || 'Unknown User');
+        const userAvatar = isGroup ? item.groupMetadata?.avatar : item.user?.avatar;
 
         return (
             <TouchableOpacity
                 style={[styles.messageItem, { borderBottomColor: colors.border }]}
-                onPress={() => router.push(`/chat/${item.id}`)}
+                onPress={() => handleConversationPress(item.id)}
             >
-                {item.user?.avatar ? (
-                    <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
+                {userAvatar ? (
+                    <Image source={{ uri: userAvatar }} style={styles.avatar} />
                 ) : (
                     <View style={[styles.avatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
                         <Text style={[styles.initialsText, { color: colors.primary }]}>
@@ -160,16 +192,25 @@ export default function MessagesScreen() {
                 )}
                 <View style={styles.messageContent}>
                     <View style={styles.messageHeader}>
-                        <Text
-                            style={[styles.userName, { color: colors.text }]}
-                            numberOfLines={1}
-                            ellipsizeMode="tail"
-                        >
-                            {userName}
-                        </Text>
-                        <Text style={[styles.timestamp, { color: colors.subtext }]}>
-                            {getRelativeTime(item.lastMessageAt || item.timestamp)}
-                        </Text>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                            <Text
+                                style={[styles.userName, { color: colors.text }]}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                            >
+                                {userName}
+                            </Text>
+                            {isGroup && (
+                                <View style={{ marginLeft: 4, backgroundColor: colors.primary + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                    <Text style={{ fontSize: 10, color: colors.primary, fontFamily: 'PlusJakartaSans_700Bold' }}>GROUP</Text>
+                                </View>
+                            )}
+                        </View>
+                        {!isGroup && (
+                            <Text style={[styles.timestamp, { color: colors.subtext }]}>
+                                {getRelativeTime(item.lastMessageAt || item.timestamp)}
+                            </Text>
+                        )}
                     </View>
 
                     <View style={styles.messageFooter}>
@@ -212,8 +253,8 @@ export default function MessagesScreen() {
                         <Ionicons name="arrow-back" size={24} color={colors.text} />
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, { color: colors.text }]}>Messages</Text>
-                    <TouchableOpacity onPress={handleCreateMessage} style={styles.backBtn}>
-                        <Ionicons name="create-outline" size={24} color={colors.text} />
+                    <TouchableOpacity onPress={() => router.push('/messages/create-group')} style={styles.backBtn}>
+                        <Ionicons name="add-circle-outline" size={28} color={colors.primary} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -233,17 +274,35 @@ export default function MessagesScreen() {
                     />
                 }
                 ListHeaderComponent={() => (
-                    <View style={styles.searchContainer}>
-                        <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <Ionicons name="search" size={20} color={colors.subtext} style={{ marginRight: 8 }} />
-                            <TextInput
-                                placeholder="Search messages"
-                                placeholderTextColor={colors.subtext}
-                                style={[styles.searchInput, { color: colors.text }]}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                            />
+                    <View>
+                        <View style={styles.searchContainer}>
+                            <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <Ionicons name="search" size={20} color={colors.subtext} style={{ marginRight: 8 }} />
+                                <TextInput
+                                    placeholder="Search messages"
+                                    placeholderTextColor={colors.subtext}
+                                    style={[styles.searchInput, { color: colors.text }]}
+                                    value={searchQuery}
+                                    onChangeText={setSearchQuery}
+                                />
+                            </View>
                         </View>
+
+                        {invitationsCount > 0 && (
+                            <TouchableOpacity
+                                style={[styles.invitationShortcut, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}
+                                onPress={() => router.push('/messages/invitations')}
+                            >
+                                <View style={[styles.invitationIcon, { backgroundColor: colors.primary }]}>
+                                    <Ionicons name="mail" size={20} color="#fff" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.invitationTitle, { color: colors.text }]}>Group Invitations</Text>
+                                    <Text style={[styles.invitationSub, { color: colors.subtext }]}>You have {invitationsCount} pending invitation{invitationsCount > 1 ? 's' : ''}</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+                            </TouchableOpacity>
+                        )}
                     </View>
                 )}
             />
@@ -377,5 +436,31 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontFamily: 'PlusJakartaSans_700Bold',
         color: '#fff',
+    },
+    invitationShortcut: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        margin: 16,
+        marginTop: 0,
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
+    invitationIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    invitationTitle: {
+        fontSize: 15,
+        fontFamily: 'PlusJakartaSans_700Bold',
+    },
+    invitationSub: {
+        fontSize: 12,
+        fontFamily: 'PlusJakartaSans_400Regular',
+        marginTop: 2,
     },
 });

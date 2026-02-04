@@ -19,6 +19,7 @@ interface MarketItemProps {
     type: 'item' | 'food' | 'service';
     images: string[];
     description: string;
+    isFreeMerch?: boolean;
 }
 
 export default function MarketItem({ item }: { item: MarketItemProps }) {
@@ -58,12 +59,19 @@ export default function MarketItem({ item }: { item: MarketItemProps }) {
                         color={isLiked ? colors.error : colors.subtext}
                     />
                 </TouchableOpacity>
+                {item.isFreeMerch && (
+                    <View style={[styles.freeBadge, { backgroundColor: colors.success }]}>
+                        <Text style={styles.freeBadgeText}>FREE</Text>
+                    </View>
+                )}
             </View>
             <View style={styles.info}>
                 <Text style={[styles.category, { color: colors.primary }]}>{item.category}</Text>
                 <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
                 <View style={styles.footer}>
-                    <Text style={[styles.price, { color: colors.text }]}>₦{(item.price || 0).toLocaleString()}</Text>
+                    <Text style={[styles.price, { color: item.isFreeMerch ? colors.success : colors.text }]}>
+                        {item.isFreeMerch ? 'FREE' : `₦${(item.price || 0).toLocaleString()}`}
+                    </Text>
                 </View>
             </View>
         </TouchableOpacity>
@@ -125,5 +133,18 @@ const styles = StyleSheet.create({
     price: {
         fontFamily: 'PlusJakartaSans_700Bold',
         fontSize: 16,
+    },
+    freeBadge: {
+        position: 'absolute',
+        top: 10,
+        left: 10,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    freeBadgeText: {
+        color: '#fff',
+        fontFamily: 'PlusJakartaSans_800ExtraBold',
+        fontSize: 10,
     },
 });

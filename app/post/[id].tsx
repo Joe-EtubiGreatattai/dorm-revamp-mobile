@@ -170,9 +170,13 @@ export default function PostDetailScreen() {
 
     const handleShare = async () => {
         try {
+            const shareUrl = `https://dorm.app/post/${id}`;
+            const shareMessage = `${post?.content || ''}\n\nView on Dorm: ${shareUrl}`;
+
             const result = await Share.share({
-                message: post?.content || '',
-                title: 'Check out this post on Dorm',
+                message: shareMessage,
+                title: 'Share Post',
+                url: shareUrl, // iOS will use this
             });
             if (result.action === Share.sharedAction) {
                 setSharesCount(prev => prev + 1);

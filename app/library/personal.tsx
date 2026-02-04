@@ -1,3 +1,4 @@
+import AISummaryModal from '@/components/AISummaryModal';
 import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -18,6 +19,9 @@ export default function PersonalLibrary() {
     const [materials, setMaterials] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [selectedSummary, setSelectedSummary] = useState<string | null>(null);
+    const [summaryModalVisible, setSummaryModalVisible] = useState(false);
+    const [selectedMaterialTitle, setSelectedMaterialTitle] = useState('');
 
     const fetchPersonalLibrary = async (showLoading = true) => {
         if (showLoading) setIsLoading(true);
@@ -63,7 +67,7 @@ export default function PersonalLibrary() {
 
     const renderTabs = () => (
         <View style={styles.tabContainer}>
-            {['Downloads', 'Saved', 'Contributions'].map((tab) => (
+            {['Downloads', 'Saved', 'Contributions', 'Summaries'].map((tab) => (
                 <TouchableOpacity
                     key={tab}
                     style={[
@@ -95,7 +99,8 @@ export default function PersonalLibrary() {
             <Ionicons
                 name={
                     activeTab === 'Downloads' ? 'download-outline' :
-                        activeTab === 'Saved' ? 'bookmark-outline' : 'cloud-upload-outline'
+                        activeTab === 'Saved' ? 'bookmark-outline' :
+                            activeTab === 'Summaries' ? 'sparkles-outline' : 'cloud-upload-outline'
                 }
                 size={64}
                 color={colors.subtext + '50'}
@@ -104,7 +109,9 @@ export default function PersonalLibrary() {
             <Text style={[styles.emptySubtitle, { color: colors.subtext }]}>
                 {activeTab === 'Contributions'
                     ? "Upload your first material to help others."
-                    : "Materials you interact with will appear here."}
+                    : activeTab === 'Summaries'
+                        ? "Generate AI summaries in the document reader to see them here."
+                        : "Materials you interact with will appear here."}
             </Text>
             {activeTab === 'Contributions' && (
                 <TouchableOpacity
@@ -117,38 +124,64 @@ export default function PersonalLibrary() {
         </View>
     );
 
-    const renderMaterialItem = ({ item }: { item: any }) => (
-        <TouchableOpacity
-            style={[styles.itemCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => router.push(`/library/material/${item.id}`)}
-        >
-            <Image source={{ uri: item.previewImage }} style={styles.itemImage} />
-            <View style={styles.itemContent}>
-                <Text numberOfLines={1} style={[styles.itemTitle, { color: colors.text }]}>{item.title}</Text>
-                <Text style={[styles.itemMeta, { color: colors.subtext }]}>{item.courseCode} • {item.type}</Text>
-                {activeTab === 'Contributions' && (
-                    <View style={styles.statsRow}>
-                        <Ionicons name="eye-outline" size={14} color={colors.primary} />
-                        <Text style={[styles.statsText, { color: colors.primary }]}>{item.views || 0} views</Text>
-                        <Ionicons name="download-outline" size={14} color={colors.primary} style={{ marginLeft: 8 }} />
-                        <Text style={[styles.statsText, { color: colors.primary }]}>{item.downloads || 0} downloads</Text>
-                    </View>
-                )}
-            </View>
-            {activeTab === 'Contributions' ? (
+    const renderMaterialItem = ({ item }: { item: any }) => {
+        if (activeTab === 'Summaries') {
+            return (
                 <TouchableOpacity
-                    style={{ padding: 8 }}
-                    onPress={() => router.push(`/library/edit/${item.id}`)}
+                    style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => {
+                        setSelectedSummary(item.aiSummary);
+                        setSelectedMaterialTitle(item.title);
+                        setSummaryModalVisible(true);
+                    }}
                 >
-                    <Ionicons name="create-outline" size={20} color={colors.primary} />
+                    <View style={[styles.aiIconContainer, { backgroundColor: colors.primary + '15' }]}>
+                        <Ionicons name="sparkles" size={24} color={colors.primary} />
+                    </View>
+                    <View style={styles.summaryContent}>
+                        <Text numberOfLines={1} style={[styles.itemTitle, { color: colors.text }]}>{item.title} Summary</Text>
+                        <Text numberOfLines={3} style={[styles.summaryPreview, { color: colors.subtext }]}>
+                            {item.aiSummary?.replace(/[#*]/g, '').trim()}
+                        </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
                 </TouchableOpacity>
-            ) : (
-                <TouchableOpacity style={{ padding: 8 }}>
-                    <Ionicons name="ellipsis-vertical" size={20} color={colors.subtext} />
-                </TouchableOpacity>
-            )}
-        </TouchableOpacity>
-    );
+            );
+        }
+
+        return (
+            <TouchableOpacity
+                style={[styles.itemCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={() => router.push(`/library/material/${item.id}`)}
+            >
+                <Image source={{ uri: item.previewImage }} style={styles.itemImage} />
+                <View style={styles.itemContent}>
+                    <Text numberOfLines={1} style={[styles.itemTitle, { color: colors.text }]}>{item.title}</Text>
+                    <Text style={[styles.itemMeta, { color: colors.subtext }]}>{item.courseCode} • {item.type}</Text>
+                    {activeTab === 'Contributions' && (
+                        <View style={styles.statsRow}>
+                            <Ionicons name="eye-outline" size={14} color={colors.primary} />
+                            <Text style={[styles.statsText, { color: colors.primary }]}>{item.views || 0} views</Text>
+                            <Ionicons name="download-outline" size={14} color={colors.primary} style={{ marginLeft: 8 }} />
+                            <Text style={[styles.statsText, { color: colors.primary }]}>{item.downloads || 0} downloads</Text>
+                        </View>
+                    )}
+                </View>
+                {activeTab === 'Contributions' ? (
+                    <TouchableOpacity
+                        style={{ padding: 8 }}
+                        onPress={() => router.push(`/library/edit/${item.id}`)}
+                    >
+                        <Ionicons name="create-outline" size={20} color={colors.primary} />
+                    </TouchableOpacity>
+                ) : (
+                    <TouchableOpacity style={{ padding: 8 }}>
+                        <Ionicons name="ellipsis-vertical" size={20} color={colors.subtext} />
+                    </TouchableOpacity>
+                )}
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -177,6 +210,12 @@ export default function PersonalLibrary() {
                     }
                 />
             )}
+
+            <AISummaryModal
+                visible={summaryModalVisible}
+                onClose={() => setSummaryModalVisible(false)}
+                summary={selectedSummary || ''}
+            />
         </SafeAreaView>
     );
 }
@@ -278,4 +317,29 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 14,
     },
+    summaryCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderRadius: 20,
+        borderWidth: 1,
+        marginBottom: 16,
+        gap: 16,
+    },
+    aiIconContainer: {
+        width: 52,
+        height: 52,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    summaryContent: {
+        flex: 1,
+    },
+    summaryPreview: {
+        fontFamily: 'PlusJakartaSans_500Medium',
+        fontSize: 13,
+        lineHeight: 18,
+        marginTop: 4,
+    }
 });

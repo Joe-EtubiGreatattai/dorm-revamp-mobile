@@ -2,6 +2,7 @@ import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
+import { useThrottledCallback } from '@/hooks/useThrottledCallback';
 import { authAPI, chatAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -49,7 +50,7 @@ export default function SelectUserScreen() {
         (u.university && u.university.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
-    const handleSelectUser = async (userId: string) => {
+    const handleSelectUser = useThrottledCallback(async (userId: string) => {
         if (creatingChat) return;
         setCreatingChat(true);
         try {
@@ -61,7 +62,7 @@ export default function SelectUserScreen() {
         } finally {
             setCreatingChat(false);
         }
-    };
+    }, 1000);
 
     const renderItem = ({ item }: { item: any }) => (
         <TouchableOpacity

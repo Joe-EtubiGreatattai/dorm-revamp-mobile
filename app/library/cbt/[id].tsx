@@ -1,8 +1,10 @@
+import ActionSuccessModal from '@/components/ActionSuccessModal';
 import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { libraryAPI } from '@/utils/apiClient';
+import { libraryAPI, postAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -11,10 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const { width } = Dimensions.get('window');
 
 export default function CBTScreen() {
-    const { id } = useLocalSearchParams();
+    const { id, questions: passedQuestions } = useLocalSearchParams();
     const router = useRouter();
     const colorScheme = useColorScheme();
-    const colors = Colors[colorScheme ?? 'light'];
+    const colors = Colors[colorScheme ?? 'light'] || Colors.light;
 
     const [questions, setQuestions] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -25,12 +27,28 @@ export default function CBTScreen() {
     const [timeLeft, setTimeLeft] = useState(300); // 5 minutes
     const [isFinished, setIsFinished] = useState(false);
     const [score, setScore] = useState(0);
+    const [isSharing, setIsSharing] = useState(false);
+    const [showShareSuccess, setShowShareSuccess] = useState(false);
+    const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
     const [cbtId, setCbtId] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchCBT = async () => {
+        const loadQuestions = async () => {
             try {
+                if (passedQuestions) {
+                    const parsed = JSON.parse(passedQuestions as string);
+                    setQuestions(parsed);
+                    setSelectedAnswers(new Array(parsed.length).fill(-1));
+                    setIsLoading(false);
+                    return;
+                }
+
+                if (!id) {
+                    setError('No CBT ID provided.');
+                    setIsLoading(false);
+                    return;
+                }
                 // If the ID passed is a Material ID, we might need a way to find the linked CBT.
                 // OR, assuming ID IS the CBT ID. The user flow said "Take CBT" from Reader -> Push CBT ID.
                 // Let's assume the ID passed to this route is the CBT ID.
@@ -80,8 +98,64 @@ export default function CBTScreen() {
                 setIsLoading(false);
             }
         };
-        if (id) fetchCBT();
-    }, [id]);
+        if (id || passedQuestions) loadQuestions();
+    }, [id, passedQuestions]);
+
+    // Timer Logic
+    useEffect(() => {
+        if (!isLoading && !isFinished && timeLeft > 0) {
+            const timer = setInterval(() => {
+                setTimeLeft((prev) => {
+                    if (prev <= 1) {
+                        clearInterval(timer);
+                        handleFinish(); // Auto-submit
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [isLoading, isFinished, timeLeft]);
+
+
+    const handleShare = async () => {
+        setIsSharing(true);
+        try {
+            const content = `🎯 I just completed a CBT practice test on Dorm! \n\nI scored ${score}/${questions.length} on the practice test. Ready for the real thing! 🚀\n\n#StudyWithDorm #DormApp #CBT`;
+            await postAPI.createPost({ content });
+            setShowShareSuccess(true);
+        } catch (error) {
+            console.error('Error sharing score:', error);
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
+    const handleGenerateReport = async () => {
+        setIsGeneratingReport(true);
+        try {
+            const actualTimeSpent = 300 - timeLeft; // Calculate time used in seconds
+            const { data } = await libraryAPI.generateCBTReport({
+                questions,
+                userAnswers: selectedAnswers,
+                score,
+                totalQuestions: questions.length,
+                timeSpent: actualTimeSpent,
+                cbtId: cbtId || id
+            });
+
+            // Navigate to report page with data
+            router.push({
+                pathname: '/library/cbt/report',
+                params: { report: JSON.stringify(data) }
+            });
+        } catch (error) {
+            console.error('Failed to generate report:', error);
+        } finally {
+            setIsGeneratingReport(false);
+        }
+    };
 
     const handleSelectOption = (optionIndex: number) => {
         const newAnswers = [...selectedAnswers];
@@ -160,28 +234,92 @@ export default function CBTScreen() {
     }
 
     if (isFinished) {
+        const percentage = Math.round((score / questions.length) * 100);
+        const isPassing = percentage >= 70;
+
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-                <Stack.Screen options={{ title: 'Test Results', headerLeft: () => null }} />
-                <View style={styles.resultsContainer}>
-                    <View style={[styles.scoreCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Ionicons name="trophy" size={80} color={colors.primary} />
-                        <Text style={[styles.scoreTitle, { color: colors.text }]}>Test Completed!</Text>
-                        <Text style={[styles.scoreText, { color: colors.primary }]}>
-                            {score} / {questions.length}
+                <Stack.Screen options={{ headerShown: false }} />
+
+                <ScrollView contentContainerStyle={styles.resultsScroll}>
+                    {/* Header with Gradient */}
+                    <LinearGradient
+                        colors={isPassing ? ['#22c55e', '#16a34a'] : [colors.primary, colors.primary + 'CC']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.resultsHeader}
+                    >
+                        <Ionicons name={isPassing ? "trophy" : "ribbon"} size={64} color="#fff" />
+                        <Text style={styles.resultsTitle}>Test Completed!</Text>
+                        <View style={styles.scoreDisplay}>
+                            <Text style={styles.scoreNumber}>{score}</Text>
+                            <Text style={styles.scoreDivider}>/</Text>
+                            <Text style={styles.scoreTotalNumber}>{questions.length}</Text>
+                        </View>
+                        <View style={styles.percentageBadge}>
+                            <Text style={styles.percentageText}>{percentage}%</Text>
+                        </View>
+                        <Text style={styles.resultsMessage}>
+                            {isPassing ? "Excellent work! You're ready for the real thing!" : "Good effort! Review the topics below and try again."}
                         </Text>
-                        <Text style={[styles.scoreSubtext, { color: colors.subtext }]}>
-                            {score >= (questions.length * 0.7) ? "Excellent work! You're ready." : "Good try! A bit more study will help."}
-                        </Text>
+                    </LinearGradient>
+
+                    <View style={styles.actionsContainer}>
+                        {/* AI Report Button */}
+                        <TouchableOpacity
+                            style={[styles.aiReportBtn, { backgroundColor: '#8b5cf6' }]}
+                            onPress={handleGenerateReport}
+                            disabled={isGeneratingReport}
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                {isGeneratingReport ? (
+                                    <ActivityIndicator color="#fff" size="small" />
+                                ) : (
+                                    <Ionicons name="sparkles" size={20} color="#fff" />
+                                )}
+                                <Text style={styles.primaryBtnText}>
+                                    {isGeneratingReport ? 'Generating...' : 'Get AI Performance Report'}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Share Button */}
+                        <TouchableOpacity
+                            style={[styles.secondaryBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                            onPress={handleShare}
+                            disabled={isSharing}
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                {isSharing ? (
+                                    <ActivityIndicator color={colors.text} size="small" />
+                                ) : (
+                                    <Ionicons name="share-social-outline" size={20} color={colors.text} />
+                                )}
+                                <Text style={[styles.secondaryBtnText, { color: colors.text }]}>
+                                    {isSharing ? 'Sharing...' : 'Share to Feed'}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Back Button */}
+                        <TouchableOpacity
+                            style={[styles.secondaryBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                            onPress={() => router.back()}
+                        >
+                            <Ionicons name="arrow-back" size={20} color={colors.text} />
+                            <Text style={[styles.secondaryBtnText, { color: colors.text }]}>Back to Library</Text>
+                        </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity
-                        style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-                        onPress={() => router.back()}
-                    >
-                        <Text style={styles.primaryBtnText}>Back to Material</Text>
-                    </TouchableOpacity>
-                </View>
+                    <ActionSuccessModal
+                        visible={showShareSuccess}
+                        onClose={() => setShowShareSuccess(false)}
+                        title="Shared Successfully!"
+                        description="Your score has been shared as a post on your feed. Keep grinding!"
+                        buttonText="Sweet"
+                        iconName="checkmark-circle"
+                    />
+                </ScrollView>
             </SafeAreaView>
         );
     }
@@ -192,13 +330,23 @@ export default function CBTScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             <Stack.Screen options={{
                 title: 'CBT Practice',
-                headerRight: () => (
-                    <View style={styles.timerBadge}>
-                        <Ionicons name="time-outline" size={16} color={colors.primary} />
-                        <Text style={[styles.timerText, { color: colors.primary }]}>{formatTime(timeLeft)}</Text>
-                    </View>
-                )
+                headerRight: () => null // Remove from header
             }} />
+
+            {/* Prominent Timer Bar */}
+            <View style={[styles.timerBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                <View style={[styles.timerPill, { backgroundColor: timeLeft < 60 ? '#fee2e2' : colors.primary + '15' }]}>
+                    <Ionicons name="time" size={18} color={timeLeft < 60 ? '#ef4444' : colors.primary} />
+                    <Text style={[styles.timerPillText, { color: timeLeft < 60 ? '#ef4444' : colors.primary }]}>
+                        {formatTime(timeLeft)}
+                    </Text>
+                </View>
+                {!isFinished && (
+                    <Text style={{ fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, color: colors.subtext }}>
+                        Time Remaining
+                    </Text>
+                )}
+            </View>
 
             <View style={styles.progressContainer}>
                 <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
@@ -279,21 +427,26 @@ const styles = StyleSheet.create({
         padding: 16,
         borderBottomWidth: 1,
     },
-    timerBadge: {
+    timerBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
-        marginRight: 10,
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
     },
-    timerText: {
-        fontFamily: 'PlusJakartaSans_700Bold',
-        fontSize: 14,
+    timerPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+    },
+    timerPillText: {
+        fontFamily: 'PlusJakartaSans_800ExtraBold',
+        fontSize: 16,
+        fontVariant: ['tabular-nums'],
     },
     progressContainer: {
         padding: 20,
@@ -364,32 +517,83 @@ const styles = StyleSheet.create({
         fontFamily: 'PlusJakartaSans_700Bold',
         fontSize: 16,
     },
-    resultsContainer: {
-        flex: 1,
-        padding: 20,
-        justifyContent: 'center',
+    resultsScroll: {
+        flexGrow: 1,
     },
-    scoreCard: {
+    resultsHeader: {
         alignItems: 'center',
-        padding: 40,
-        borderRadius: 32,
-        borderWidth: 1,
-        marginBottom: 40,
+        paddingVertical: 60,
+        paddingHorizontal: 20,
     },
-    scoreTitle: {
+    resultsTitle: {
         fontFamily: 'PlusJakartaSans_800ExtraBold',
-        fontSize: 24,
+        fontSize: 28,
+        color: '#fff',
         marginTop: 20,
-        marginBottom: 8,
+        marginBottom: 24,
     },
-    scoreText: {
-        fontFamily: 'PlusJakartaSans_800ExtraBold',
-        fontSize: 48,
+    scoreDisplay: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
         marginBottom: 16,
     },
-    scoreSubtext: {
+    scoreNumber: {
+        fontFamily: 'PlusJakartaSans_800ExtraBold',
+        fontSize: 72,
+        color: '#fff',
+    },
+    scoreDivider: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 48,
+        color: 'rgba(255,255,255,0.7)',
+        marginHorizontal: 8,
+    },
+    scoreTotalNumber: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 48,
+        color: 'rgba(255,255,255,0.9)',
+    },
+    percentageBadge: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        borderRadius: 20,
+        marginBottom: 16,
+    },
+    percentageText: {
+        fontFamily: 'PlusJakartaSans_800ExtraBold',
+        fontSize: 20,
+        color: '#fff',
+    },
+    resultsMessage: {
         fontFamily: 'PlusJakartaSans_500Medium',
         fontSize: 16,
+        color: '#fff',
         textAlign: 'center',
+        lineHeight: 24,
+        paddingHorizontal: 20,
+    },
+    actionsContainer: {
+        padding: 20,
+        gap: 12,
+    },
+    aiReportBtn: {
+        height: 56,
+        borderRadius: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    secondaryBtn: {
+        height: 56,
+        borderRadius: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        flexDirection: 'row',
+        gap: 8,
+    },
+    secondaryBtnText: {
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+        fontSize: 15,
     },
 });

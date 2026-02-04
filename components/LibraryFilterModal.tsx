@@ -1,19 +1,23 @@
+import CustomDropdown from '@/components/CustomDropdown';
 import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import React, { useState } from 'react';
+import { authAPI } from '@/utils/apiClient';
+import React, { useEffect, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 interface FilterModalProps {
     visible: boolean;
     onClose: () => void;
     onApply: (filters: FilterState) => void;
+    initialFilters?: FilterState;
 }
 
 export interface FilterState {
     level: string[];
     department: string[];
     type: string[];
+    university: string[];
     sortBy: string;
 }
 
@@ -22,20 +26,39 @@ const DEPARTMENTS = ['Computer Science', 'Mathematics', 'Engineering', 'Arts', '
 const TYPES = ['PDF', 'DOCX', 'PPT', 'IMG'];
 const SORT_OPTIONS = ['Relevance', 'Date', 'Popularity', 'Rating'];
 
-export default function LibraryFilterModal({ visible, onClose, onApply }: FilterModalProps) {
+export default function LibraryFilterModal({ visible, onClose, onApply, initialFilters }: FilterModalProps) {
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
 
-    const [filters, setFilters] = useState<FilterState>({
+    const [filters, setFilters] = useState<FilterState>(initialFilters || {
         level: [],
         department: [],
         type: [],
+        university: [],
         sortBy: 'Relevance',
     });
+
+    const [universities, setUniversities] = useState<string[]>([]);
+
+    useEffect(() => {
+        const fetchUniversities = async () => {
+            try {
+                const { data } = await authAPI.getUniversities();
+                setUniversities(data);
+            } catch (error) {
+                console.log('Error fetching universities:', error);
+                // Fallback to empty or initial
+            }
+        };
+        fetchUniversities();
+    }, []);
 
     const toggleFilter = (category: keyof FilterState, value: string) => {
         if (category === 'sortBy') {
             setFilters(prev => ({ ...prev, sortBy: value }));
+        } else if (category === 'university') {
+            // Dropdown selection (Single Select logic for now as per dropdown usage)
+            setFilters(prev => ({ ...prev, university: [value] }));
         } else {
             setFilters(prev => {
                 const list = prev[category] as string[];
@@ -58,6 +81,7 @@ export default function LibraryFilterModal({ visible, onClose, onApply }: Filter
             level: [],
             department: [],
             type: [],
+            university: [],
             sortBy: 'Relevance',
         });
     };
@@ -112,6 +136,17 @@ export default function LibraryFilterModal({ visible, onClose, onApply }: Filter
                 </View>
 
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+                    <View style={styles.section}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>University</Text>
+                        <CustomDropdown
+                            options={universities.map(uni => ({ label: uni, value: uni }))}
+                            value={filters.university[0] || ''}
+                            onSelect={(value) => toggleFilter('university', value)}
+                            placeholder="Select University"
+                            searchPlaceholder="Search University..."
+                        />
+                    </View>
+
                     {renderSection('Level', LEVELS, 'level')}
                     {renderSection('Department', DEPARTMENTS, 'department')}
                     {renderSection('File Type', TYPES, 'type')}

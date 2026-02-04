@@ -7,24 +7,34 @@ import Colors from '@/constants/Colors';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useOfflineData } from '@/hooks/useOfflineData';
 import { libraryAPI } from '@/utils/apiClient';
+import { getSocket } from '@/utils/socket';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, RefreshControl, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/context/AuthContext';
+// ... imports
+
 export default function LibraryScreen() {
+    const { user } = useAuth();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'] || Colors.light;
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
     const [isFilterModalVisible, setFilterModalVisible] = useState(false);
+
     const [activeFilters, setActiveFilters] = useState<FilterState>({
         level: [],
         department: [],
         type: [],
+        university: user?.university ? [user.university] : [],
         sortBy: 'Relevance',
     });
+    const [aiCBTs, setAiCBTs] = useState<any[]>([]);
+    const [isAiLoading, setIsAiLoading] = useState(false);
 
     // Offline Data Hooks
     const transformResponse = useMemo(() => (res: any) => {
@@ -79,6 +89,14 @@ export default function LibraryScreen() {
         () => libraryAPI.getMaterials({
             search: debouncedSearch || undefined,
             type: activeFilters.type.length > 0 ? activeFilters.type[0] : undefined,
+            department: activeFilters.department.length > 0 ? activeFilters.department[0] : undefined,
+            level: activeFilters.level.length > 0 ? activeFilters.level[0] : undefined,
+            // Assuming the backend expects 'university' as a query param.
+            // If the user selected multiple, maybe send array or just first? 
+            // Modal allows multi-select in logic, but UI might be single. 
+            // Let's assume backend handles single value or we send first.
+            // libraryController.js takes `university` from query.
+            university: activeFilters.university.length > 0 ? activeFilters.university[0] : undefined,
         }),
         [] as any[],
         transformResponse
@@ -91,10 +109,45 @@ export default function LibraryScreen() {
     const isLoading = facLoading || matLoading; // Initial load (cache read or first fetch)
     const isRefetching = matRefetching;
 
+    const fetchAiCBTs = async () => {
+        setIsAiLoading(true);
+        try {
+            const { data } = await libraryAPI.getAICBTs();
+            setAiCBTs(data);
+        } catch (error) {
+            console.error('Error fetching AI CBTs:', error);
+        } finally {
+            setIsAiLoading(false);
+        }
+    };
+
     const onRefresh = () => {
         refetchFaculties();
         refetchMaterials();
+        fetchAiCBTs();
     };
+
+    React.useEffect(() => {
+        fetchAiCBTs();
+
+        // Listen for real-time CBT updates
+        const socket = getSocket();
+        if (socket) {
+            socket.on('new_cbt', (newCbt: any) => {
+                setAiCBTs(prev => {
+                    // Avoid duplicates
+                    if (prev.find(c => c._id === newCbt._id)) return prev;
+                    return [newCbt, ...prev];
+                });
+            });
+        }
+
+        return () => {
+            if (socket) {
+                socket.off('new_cbt');
+            }
+        };
+    }, []);
 
     // Client-side sorting on the displayed data
     const filteredMaterials = useMemo(() => {
@@ -109,7 +162,9 @@ export default function LibraryScreen() {
         <View style={styles.header}>
             <View>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>Library</Text>
-                <Text style={[styles.headerSubtitle, { color: colors.subtext }]}>Your academic vault</Text>
+                <Text style={[styles.headerSubtitle, { color: colors.subtext }]}>
+                    {activeFilters.university.length > 0 ? activeFilters.university[0] : 'All Schools'}
+                </Text>
             </View>
             <View style={styles.headerActions}>
                 <TouchableOpacity
@@ -237,6 +292,66 @@ export default function LibraryScreen() {
                     <>
                         {renderCategories()}
 
+                        {aiCBTs.length > 0 && (
+                            <View style={styles.section}>
+                                <View style={styles.sectionHeader}>
+                                    <Text style={[styles.sectionTitle, { color: colors.text }]}>AI Practice Tests ✨</Text>
+                                    <View style={[styles.aiBadge, { backgroundColor: colors.primary + '20' }]}>
+                                        <Text style={[styles.aiBadgeText, { color: colors.primary }]}>NEW</Text>
+                                    </View>
+                                    <View style={{ flex: 1 }} />
+                                    <TouchableOpacity onPress={() => router.push('/library/cbt/list')}>
+                                        <Text style={[styles.viewAll, { color: colors.primary }]}>View All</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
+                                    {aiCBTs.slice(0, 5).map((cbt) => (
+                                        <TouchableOpacity
+                                            key={cbt._id}
+                                            activeOpacity={0.9}
+                                            onPress={() => router.push({
+                                                pathname: "/library/cbt/[id]",
+                                                params: { id: cbt._id }
+                                            })}
+                                        >
+                                            <LinearGradient
+                                                colors={[colors.primary, colors.primary + 'D9']} // Gradient logic
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 1 }}
+                                                style={[styles.aiCbtCard, { borderColor: colors.primary + '40' }]}
+                                            >
+                                                <View style={styles.aiCardPattern} />
+                                                <View style={styles.aiCbtLeft}>
+                                                    <View style={[styles.aiCbtIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                                                        <Ionicons name="sparkles" size={22} color="#fff" />
+                                                    </View>
+                                                </View>
+                                                <View style={styles.aiCbtContent}>
+                                                    <Text numberOfLines={1} style={styles.aiCbtTitleLight}>{cbt.title}</Text>
+                                                    <Text style={styles.aiCbtSubLight}>{cbt.courseCode} • {cbt.questions.length} Questions</Text>
+                                                    {cbt.stats && (
+                                                        <View style={styles.statsRowLight}>
+                                                            <View style={styles.statBadge}>
+                                                                <Ionicons name="trophy" size={10} color="#fbbf24" style={{ marginRight: 4 }} />
+                                                                <Text style={styles.statTextLight}>{cbt.stats.highScore}/{cbt.questions.length}</Text>
+                                                            </View>
+                                                            <View style={styles.statBadge}>
+                                                                <Ionicons name="time" size={10} color="#fff" style={{ marginRight: 4 }} />
+                                                                <Text style={styles.statTextLight}>{Math.floor(cbt.stats.fastestTime / 60)}m {cbt.stats.fastestTime % 60}s</Text>
+                                                            </View>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                                <View style={styles.aiChevron}>
+                                                    <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.8)" />
+                                                </View>
+                                            </LinearGradient>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
+
                         <View style={styles.section}>
                             <View style={styles.sectionHeader}>
                                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Uploads</Text>
@@ -302,6 +417,7 @@ export default function LibraryScreen() {
                 visible={isFilterModalVisible}
                 onClose={() => setFilterModalVisible(false)}
                 onApply={setActiveFilters}
+                initialFilters={activeFilters}
             />
         </SafeAreaView>
     );
@@ -523,5 +639,83 @@ const styles = StyleSheet.create({
         fontFamily: 'PlusJakartaSans_600SemiBold',
         fontSize: 16,
         marginTop: 12,
+    },
+    aiBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 8,
+        marginLeft: 8,
+    },
+    aiBadgeText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 10,
+    },
+    aiCbtCard: {
+        width: 280,
+        height: 100,
+        borderRadius: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        overflow: 'hidden',
+        borderWidth: 1,
+    },
+    aiCardPattern: {
+        position: 'absolute',
+        top: -20,
+        right: -20,
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        transform: [{ scale: 1.5 }],
+    },
+    aiCbtLeft: {
+        marginRight: 14,
+    },
+    aiCbtIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    aiCbtContent: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    aiCbtTitleLight: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 16,
+        color: '#fff',
+        marginBottom: 4,
+    },
+    aiCbtSubLight: {
+        fontFamily: 'PlusJakartaSans_500Medium',
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.8)',
+        marginBottom: 8,
+    },
+    statsRowLight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    statBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.2)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    statTextLight: {
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+        fontSize: 11,
+        color: '#fff',
+    },
+    aiChevron: {
+        marginLeft: 8,
     },
 });

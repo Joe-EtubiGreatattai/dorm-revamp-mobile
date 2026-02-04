@@ -111,6 +111,9 @@ export const authAPI = {
             headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined
         }),
 
+    submitAppeal: (data: { email: string; message: string }) =>
+        apiClient.post('/auth/appeal', data),
+
     // Utils
     uploadImage: async (fileUri: string) => {
         const formData = new FormData();
@@ -177,8 +180,8 @@ export const walletAPI = {
 
 // ============ POST ENDPOINTS ============
 export const postAPI = {
-    getFeed: (page = 1, limit = 20) =>
-        apiClient.get(`/posts/feed?page=${page}&limit=${limit}`),
+    getFeed: (page = 1, limit = 20, tab?: string) =>
+        apiClient.get(`/posts/feed`, { params: { page, limit, tab } }),
 
     getUserPosts: (userId: string, tab?: string) =>
         apiClient.get(`/posts/user/${userId}`, { params: { tab } }),
@@ -268,6 +271,9 @@ export const marketAPI = {
 
     purchaseItem: (id: string) =>
         apiClient.post(`/market/items/${id}/purchase`),
+
+    claimFreeMerch: (id: string) =>
+        apiClient.post(`/market/merch/${id}/claim`),
 };
 
 // ============ ORDER ENDPOINTS ============
@@ -341,6 +347,9 @@ export const notificationAPI = {
     getNotifications: () =>
         apiClient.get('/notifications'),
 
+    getNotification: (id: string) =>
+        apiClient.get(`/notifications/${id}`),
+
     markAsRead: (id: string) =>
         apiClient.put(`/notifications/${id}/read`),
 
@@ -392,7 +401,7 @@ export const electionAPI = {
 
 // ============ LIBRARY ENDPOINTS ============
 export const libraryAPI = {
-    getMaterials: (params?: { search?: string; type?: string; department?: string; level?: string }) =>
+    getMaterials: (params?: { search?: string; type?: string; department?: string; level?: string; university?: string }) =>
         apiClient.get('/library/materials', { params }),
 
     getMaterial: (id: string) =>
@@ -433,9 +442,12 @@ export const libraryAPI = {
     // New CBT endpoints
     getCBT: (id: string) => apiClient.get(`/library/cbt/${id}`),
     getCBTByMaterial: (materialId: string) => apiClient.get(`/library/cbt/material/${materialId}`),
+    getAICBTs: () => apiClient.get('/library/cbt/ai/all'),
 
     submitCBT: (data: { cbtId: string; answers: any[]; timeSpent: number }) =>
         apiClient.post('/library/cbt/submit', data),
+
+    generateCBTReport: (data: any) => apiClient.post('/ai/cbt-report', data),
 
     summarize: (data: { text: string; length?: string }) =>
         apiClient.post('/library/summarize', data),
@@ -446,9 +458,31 @@ export const chatAPI = {
     getConversations: () => apiClient.get('/chat/conversations'),
     getConversation: (id: string) => apiClient.get(`/chat/conversations/${id}`),
     getMessages: (conversationId: string) => apiClient.get(`/chat/conversations/${conversationId}/messages`),
-    sendMessage: (conversationId: string, content: string) => apiClient.post(`/chat/conversations/${conversationId}/messages`, { content }),
+    sendMessage: (conversationId: string, data: { content: string; type?: string; mediaUrl?: string; replyTo?: string; marketItem?: string }) =>
+        apiClient.post(`/chat/conversations/${conversationId}/messages`, data),
     createConversation: (recipientId: string) => apiClient.post('/chat/conversations', { recipientId }),
     getUnreadCount: () => apiClient.get('/chat/unread-count'),
+    editMessage: (messageId: string, content: string) => apiClient.put(`/chat/messages/${messageId}`, { content }),
+    deleteMessage: (messageId: string) => apiClient.delete(`/chat/messages/${messageId}`),
+    reactToMessage: (messageId: string, emoji: string) => apiClient.post(`/chat/messages/${messageId}/react`, { emoji }),
+
+    // Group Features
+    createGroup: (data: { name: string; description?: string; avatar?: string; initialMembers?: string[] }) =>
+        apiClient.post('/chat/groups', data),
+    updateGroup: (groupId: string, data: { name?: string; description?: string; avatar?: string }) =>
+        apiClient.put(`/chat/groups/${groupId}`, data),
+    deleteGroup: (groupId: string) =>
+        apiClient.delete(`/chat/groups/${groupId}`),
+    inviteToGroup: (groupId: string, userIds: string[]) =>
+        apiClient.post(`/chat/groups/${groupId}/invite`, { userIds }),
+    leaveGroup: (groupId: string) =>
+        apiClient.post(`/chat/groups/${groupId}/leave`),
+    manageMember: (groupId: string, data: { userId: string; action: 'kick' | 'make_admin' | 'remove_admin' }) =>
+        apiClient.post(`/chat/groups/${groupId}/manage-member`, data),
+    getInvitations: () =>
+        apiClient.get('/chat/invitations'),
+    handleInvitation: (invitationId: string, action: 'accept' | 'decline') =>
+        apiClient.post(`/chat/invitations/${invitationId}/${action}`),
 };
 
 // ============ SUPPORT/BUG ENDPOINTS ============
@@ -487,6 +521,26 @@ export const reviewAPI = {
 
     getVendorReviews: (vendorId: string) =>
         apiClient.get(`/reviews/vendor/${vendorId}`),
+};
+
+// ============ AI ENDPOINTS ============
+export const aiAPI = {
+    summarize: (data: { materialId?: string; textContent?: string }) =>
+        apiClient.post('/ai/summarize', data),
+
+    generateCBT: (data: { materialId?: string; textContent?: string; numQuestions?: number }) =>
+        apiClient.post('/ai/generate-cbt', data),
+};
+
+// ============ ADMIN ENDPOINTS ============
+export const adminAPI = {
+    banUser: (userId: string, data: { reason: string; banExpires?: string }) =>
+        apiClient.put(`/admin/users/${userId}/ban`, data),
+
+    getAppeals: () => apiClient.get('/admin/appeals'),
+
+    updateAppealStatus: (id: string, data: { status: 'approved' | 'rejected'; adminNotes?: string }) =>
+        apiClient.put(`/admin/appeals/${id}`, data),
 };
 
 export default apiClient;

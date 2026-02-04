@@ -1,9 +1,10 @@
 import { useRouter, useSegments } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Alert } from 'react-native';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { authAPI, setAuthToken } from '../utils/apiClient';
-import { initSocket } from '../utils/socket';
+import { getSocket, initSocket } from '../utils/socket';
 
 type User = {
     _id: string;
@@ -46,6 +47,8 @@ type User = {
     identityType?: 'bvn' | 'nin';
     kycDocument?: string;
     role: 'user' | 'admin' | 'ambassador';
+    isBanned?: boolean;
+    banReason?: string;
 };
 
 type AuthContextType = {
@@ -98,18 +101,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     // Fetch user info - we don't block isLoading on this if we want fastest splash hide,
                     // but we need the user object for initial routing. Let's parallelize the rest.
                     const { data } = await authAPI.getMe();
+                    // Non-blocking initialization - Init socket first so effect can pick it up
+                    initSocket(token);
                     setUser(data);
 
-                    // Non-blocking initialization
-                    initSocket(token);
                     registerForPushNotificationsAsync().catch(err =>
                         console.log('Push notification registration failed:', err)
                     );
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.log('Error loading user:', error);
-                await SecureStore.deleteItemAsync('token');
-                setAuthToken(null);
+                if (error.response?.status === 403) {
+                    // User is banned
+                    Alert.alert(
+                        'Account Banned',
+                        error.response.data.reason || 'Your account has been banned.',
+                        [{ text: 'OK', onPress: () => logout() }]
+                    );
+                } else {
+                    await SecureStore.deleteItemAsync('token');
+                    setAuthToken(null);
+                }
             } finally {
                 setIsLoading(false);
             }
@@ -118,17 +130,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loadUser();
     }, []);
 
-    const login = async (email: string, password: string) => {
+    // Socket listener for real-time ban
+    useEffect(() => {
+        const socket = getSocket();
+        if (!socket) {
+            console.log('AuthContext: No socket available for ban listener');
+            return;
+        }
+
+        console.log('AuthContext: Attaching user:banned listener. Current ID:', socket.id || 'Connecting...');
+
+        const handleBan = (data: { reason: string }) => {
+            console.log('AuthContext: Received user:banned event', data);
+            Alert.alert(
+                'Account Banned',
+                data.reason || 'Your account has been banned by an administrator.',
+                [{ text: 'OK', onPress: () => logout() }]
+            );
+        };
+
+        socket.on('user:banned', handleBan);
+
+        return () => {
+            console.log('AuthContext: Detaching user:banned listener');
+            socket.off('user:banned', handleBan);
+        };
+    }, [user]);
+
+    const login = React.useCallback(async (email: string, password: string) => {
         try {
             const { data } = await authAPI.login({ email, password });
             const { token, ...userData } = data;
 
             await SecureStore.setItemAsync('token', token);
             setAuthToken(token);
-            setUser(userData);
-
-            // Initialize socket with token
+            // Initialize socket with token first
             initSocket(token);
+            setUser(userData);
             // Register Push Token
             await registerForPushNotificationsAsync();
 
@@ -136,9 +174,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (error: any) {
             throw new Error(error.response?.data?.message || 'Login failed');
         }
-    };
+    }, [router, registerForPushNotificationsAsync]);
 
-    const register = async (userData: any) => {
+    const register = React.useCallback(async (userData: any) => {
         try {
             const { data } = await authAPI.register(userData);
             const { token, ...userResponse } = data;
@@ -154,40 +192,42 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (error: any) {
             throw new Error(error.response?.data?.message || 'Registration failed');
         }
-    };
+    }, [router, registerForPushNotificationsAsync]);
 
-    const logout = async () => {
+    const logout = React.useCallback(async () => {
         await SecureStore.deleteItemAsync('token');
         setAuthToken(null);
         setUser(null);
         router.replace('/');
-    };
+    }, [router]);
 
-    const refreshUser = async () => {
+    const refreshUser = React.useCallback(async () => {
         try {
             const { data } = await authAPI.getMe();
             setUser(data);
         } catch (error) {
             console.log('Error refreshing user:', error);
         }
-    };
+    }, []);
 
-    const completeOnboarding = async () => {
+    const completeOnboarding = React.useCallback(async () => {
         await SecureStore.setItemAsync('hasSeenOnboarding', 'true');
         setHasSeenOnboarding(true);
-    };
+    }, []);
+
+    const value = React.useMemo(() => ({
+        user,
+        isLoading,
+        hasSeenOnboarding,
+        login,
+        register,
+        logout,
+        refreshUser,
+        completeOnboarding
+    }), [user, isLoading, hasSeenOnboarding, login, register, logout, refreshUser, completeOnboarding]);
 
     return (
-        <AuthContext.Provider value={{
-            user,
-            isLoading,
-            hasSeenOnboarding,
-            login,
-            register,
-            logout,
-            refreshUser,
-            completeOnboarding
-        }}>
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );

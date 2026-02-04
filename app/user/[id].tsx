@@ -5,6 +5,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
+import { useThrottledCallback } from '@/hooks/useThrottledCallback';
 import { authAPI, chatAPI, postAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -109,7 +110,7 @@ export default function UserProfileScreen() {
         }
     };
 
-    const handleMessage = async () => {
+    const handleMessage = useThrottledCallback(async () => {
         if (chatLoading) return;
         setChatLoading(true);
         try {
@@ -121,7 +122,7 @@ export default function UserProfileScreen() {
         } finally {
             setChatLoading(false);
         }
-    };
+    }, 1000);
 
     const handleBlock = async () => {
         showAlert({

@@ -284,9 +284,25 @@ export default function TrackerScreen() {
                         <Image source={{ uri: item.image || item.images?.[0] }} style={styles.itemImage} />
                         <View style={styles.itemInfo}>
                             <Text style={[styles.itemTitle, { color: colors.text }]}>{item.title}</Text>
-                            <Text style={[styles.itemPrice, { color: colors.primary }]}>₦{item.price?.toLocaleString()}</Text>
+                            <Text style={[styles.itemPrice, { color: colors.primary }]}>
+                                {order.isFreeMerchOrder ? 'FREE MERCH' : `₦${item.price?.toLocaleString()}`}
+                            </Text>
                         </View>
                     </View>
+
+                    {order.pickupPoint && (
+                        <>
+                            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                            <View style={styles.pickupSection}>
+                                <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 4 }]}>Pick-up Point</Text>
+                                <View style={styles.pickupRow}>
+                                    <Ionicons name="location" size={20} color={colors.primary} />
+                                    <Text style={[styles.pickupText, { color: colors.text }]}>{order.pickupPoint}</Text>
+                                </View>
+                            </View>
+                        </>
+                    )}
+
                     <View style={[styles.divider, { backgroundColor: colors.border }]} />
                     <View style={styles.orderMeta}>
                         <Text style={[styles.orderId, { color: colors.subtext }]}>Order ID: #{order._id?.slice(-6)}</Text>
@@ -677,5 +693,19 @@ const styles = StyleSheet.create({
         fontFamily: 'PlusJakartaSans_700Bold',
         color: '#fff',
         fontSize: 15,
+    },
+    pickupSection: {
+        paddingVertical: 8,
+    },
+    pickupRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 4,
+    },
+    pickupText: {
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+        fontSize: 15,
+        flex: 1,
     },
 });
