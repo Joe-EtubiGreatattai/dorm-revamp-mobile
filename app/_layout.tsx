@@ -19,11 +19,13 @@ import 'react-native-reanimated';
 const queryClient = new QueryClient();
 
 import CustomLoader from '@/components/CustomLoader';
+import RestrictedTabModal from '@/components/RestrictedTabModal';
 import { useColorScheme } from '@/components/useColorScheme';
 import { AlertProvider } from '@/context/AlertContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { CallProvider } from '@/context/CallContext';
 import { HapticsProvider } from '@/context/HapticsContext';
+import { RestrictionProvider } from '@/context/RestrictionContext';
 import { ThemeProvider as AppThemeProvider } from '@/context/ThemeContext';
 
 export {
@@ -64,13 +66,16 @@ export default function RootLayout() {
     <AppThemeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <CallProvider>
-            <HapticsProvider>
-              <AlertProvider>
-                <RootLayoutNav fontsLoaded={loaded} />
-              </AlertProvider>
-            </HapticsProvider>
-          </CallProvider>
+          <RestrictionProvider>
+            <CallProvider>
+              <HapticsProvider>
+                <AlertProvider>
+                  <RootLayoutNav fontsLoaded={loaded} />
+                  <RestrictedTabModal />
+                </AlertProvider>
+              </HapticsProvider>
+            </CallProvider>
+          </RestrictionProvider>
         </AuthProvider>
       </QueryClientProvider>
     </AppThemeProvider>

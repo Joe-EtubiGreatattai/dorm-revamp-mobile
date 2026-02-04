@@ -26,6 +26,7 @@ export default function MessagesScreen() {
     const [refreshing, setRefreshing] = React.useState(false);
     const [typingUsers, setTypingUsers] = React.useState<{ [conversationId: string]: boolean }>({});
     const [invitationsCount, setInvitationsCount] = React.useState(0);
+    const [onlineUsers, setOnlineUsers] = React.useState<Set<string>>(new Set());
 
     const fetchConversations = async () => {
         try {
@@ -34,6 +35,25 @@ export default function MessagesScreen() {
                 chatAPI.getInvitations()
             ]);
             setConversations(convRes.data);
+
+            // Initialize online users from fetched data
+            const initialOnlineUsers = new Set<string>();
+            convRes.data.forEach((c: any) => {
+                // Check direct user (1-on-1)
+                if (c.user?.isOnline) {
+                    initialOnlineUsers.add(c.user._id || c.user.id);
+                }
+                // Check participants (Group)
+                if (c.participants) {
+                    c.participants.forEach((p: any) => {
+                        if (p.isOnline) {
+                            initialOnlineUsers.add(p._id || p.id);
+                        }
+                    });
+                }
+            });
+            setOnlineUsers(initialOnlineUsers);
+
             setInvitationsCount(invRes.data.filter((i: any) => i.status === 'pending').length);
         } catch (error) {
             console.log('Error fetching data:', error);
@@ -114,16 +134,39 @@ export default function MessagesScreen() {
             });
         };
 
+        const handleUserOnline = ({ userId }: { userId: string }) => {
+            setOnlineUsers(prev => {
+                const newSet = new Set(prev);
+                newSet.add(userId);
+                return newSet;
+            });
+        };
+
+        const handleUserOffline = ({ userId }: { userId: string }) => {
+            setOnlineUsers(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(userId);
+                return newSet;
+            });
+        };
+
         socket.on('message:new', handleNewMessage);
         socket.on('notification:message', handleMessageNotification);
         socket.on('typing:indicator', handleTypingIndicator);
         socket.on('conversation:updated', handleConversationUpdated);
+        socket.on('user:online', handleUserOnline);
+        socket.on('user:offline', handleUserOffline);
+
+        // request initial online status if backend supports it, or just rely on events
+        socket.emit('get:online_users');
 
         return () => {
             socket.off('message:new', handleNewMessage);
             socket.off('notification:message', handleMessageNotification);
             socket.off('typing:indicator', handleTypingIndicator);
             socket.off('conversation:updated', handleConversationUpdated);
+            socket.off('user:online', handleUserOnline);
+            socket.off('user:offline', handleUserOffline);
         };
     }, []);
 
@@ -176,20 +219,27 @@ export default function MessagesScreen() {
         const userName = isGroup ? item.groupMetadata?.name : (item.user?.name || 'Unknown User');
         const userAvatar = isGroup ? item.groupMetadata?.avatar : item.user?.avatar;
 
+        const isOnline = !isGroup && item.user?._id && onlineUsers.has(item.user._id);
+        const onlineCount = isGroup ? (item.participants?.filter((p: any) => onlineUsers.has(p._id || p.id))?.length || 0) : 0;
+
         return (
             <TouchableOpacity
                 style={[styles.messageItem, { borderBottomColor: colors.border }]}
                 onPress={() => handleConversationPress(item.id)}
             >
-                {userAvatar ? (
-                    <Image source={{ uri: userAvatar }} style={styles.avatar} />
-                ) : (
-                    <View style={[styles.avatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
-                        <Text style={[styles.initialsText, { color: colors.primary }]}>
-                            {getInitials(userName)}
-                        </Text>
-                    </View>
-                )}
+                <View style={styles.avatarContainer}>
+                    {userAvatar ? (
+                        <Image source={{ uri: userAvatar }} style={styles.avatar} />
+                    ) : (
+                        <View style={[styles.avatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
+                            <Text style={[styles.initialsText, { color: colors.primary }]}>
+                                {getInitials(userName)}
+                            </Text>
+                        </View>
+                    )}
+                    {isOnline && <View style={[styles.onlineBadge, { borderColor: colors.background }]} />}
+                </View>
+
                 <View style={styles.messageContent}>
                     <View style={styles.messageHeader}>
                         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
@@ -200,10 +250,23 @@ export default function MessagesScreen() {
                             >
                                 {userName}
                             </Text>
-                            {isGroup && (
-                                <View style={{ marginLeft: 4, backgroundColor: colors.primary + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                    <Text style={{ fontSize: 10, color: colors.primary, fontFamily: 'PlusJakartaSans_700Bold' }}>GROUP</Text>
+                            {isGroup ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 4 }}>
+                                    <View style={{ backgroundColor: colors.primary + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 4 }}>
+                                        <Text style={{ fontSize: 10, color: colors.primary, fontFamily: 'PlusJakartaSans_700Bold' }}>GROUP</Text>
+                                    </View>
+                                    {onlineCount > 0 && (
+                                        <Text style={{ fontSize: 10, color: '#4ADE80', fontFamily: 'PlusJakartaSans_600SemiBold' }}>
+                                            {onlineCount} online
+                                        </Text>
+                                    )}
                                 </View>
+                            ) : (
+                                isOnline && (
+                                    <View style={{ marginLeft: 4, backgroundColor: '#4ADE8020', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                        <Text style={{ fontSize: 10, color: '#4ADE80', fontFamily: 'PlusJakartaSans_700Bold' }}>ONLINE</Text>
+                                    </View>
+                                )
                             )}
                         </View>
                         {!isGroup && (
@@ -371,7 +434,22 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
+        // marginRight: 16, // Moved to container
+    },
+    avatarContainer: {
+        position: 'relative',
         marginRight: 16,
+    },
+    onlineBadge: {
+        position: 'absolute',
+        bottom: 2,
+        right: 2,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        backgroundColor: '#4ADE80',
+        borderWidth: 2,
+        zIndex: 10,
     },
     initialsContainer: {
         alignItems: 'center',

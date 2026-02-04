@@ -70,6 +70,7 @@ export default function GroupSettingsScreen() {
     const [manageModalVisible, setManageModalVisible] = useState(false);
     const [selectedMember, setSelectedMember] = useState<any>(null);
     const [isMemberActionLoading, setIsMemberActionLoading] = useState(false);
+    const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
     const fetchGroupDetails = async () => {
         try {
@@ -78,6 +79,17 @@ export default function GroupSettingsScreen() {
             setEditName(data.groupMetadata?.name || '');
             setEditDesc(data.groupMetadata?.description || '');
             setEditAvatar(data.groupMetadata?.avatar || null);
+
+            // Initialize online users
+            if (data.participants) {
+                const initialOnline = new Set<string>();
+                data.participants.forEach((p: any) => {
+                    if (p.isOnline) {
+                        initialOnline.add(p._id);
+                    }
+                });
+                setOnlineUsers(initialOnline);
+            }
         } catch (error) {
             console.log('Error fetching group details:', error);
             showStatusModal({
@@ -122,10 +134,33 @@ export default function GroupSettingsScreen() {
             }
         };
 
+        const handleUserOnline = ({ userId }: { userId: string }) => {
+            setOnlineUsers(prev => {
+                const newSet = new Set(prev);
+                newSet.add(userId);
+                return newSet;
+            });
+        };
+
+        const handleUserOffline = ({ userId }: { userId: string }) => {
+            setOnlineUsers(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(userId);
+                return newSet;
+            });
+        };
+
         socket.on('conversation:updated', handleConversationUpdated);
+        socket.on('user:online', handleUserOnline);
+        socket.on('user:offline', handleUserOffline);
+
+        // request initial online status if needed
+        socket.emit('get:online_users');
 
         return () => {
             socket.off('conversation:updated', handleConversationUpdated);
+            socket.off('user:online', handleUserOnline);
+            socket.off('user:offline', handleUserOffline);
         };
     }, [id]);
 
@@ -316,9 +351,14 @@ export default function GroupSettingsScreen() {
                 style={styles.memberAvatar}
             />
             <View style={styles.memberInfo}>
-                <Text style={[styles.memberName, { color: colors.text }]}>{item.name}</Text>
-                <Text style={[styles.memberRole, { color: colors.subtext }]}>
-                    {group.admins?.includes(item._id) ? 'Admin' : 'Member'}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={[styles.memberName, { color: colors.text }]}>{item.name}</Text>
+                    {onlineUsers.has(item._id) && (
+                        <View style={{ marginLeft: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ADE80' }} />
+                    )}
+                </View>
+                <Text style={[styles.memberRole, { color: onlineUsers.has(item._id) ? '#4ADE80' : colors.subtext }]}>
+                    {onlineUsers.has(item._id) ? 'Online' : (group.admins?.includes(item._id) ? 'Admin' : 'Member')}
                 </Text>
             </View>
             {item._id === group.creatorId && (

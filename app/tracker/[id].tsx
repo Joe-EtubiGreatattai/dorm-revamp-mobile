@@ -165,33 +165,10 @@ export default function TrackerScreen() {
     // Define steps based on type and status
     // Assuming order.timeline is provided by backend [ { title, time, completed, current } ]
     // or we construct it from order.status
-    const getSteps = () => {
-        if (order.timeline) return order.timeline;
-
-        // Fallback logic if timeline not provided
-        const steps: { title: string; time: any; completed: boolean; current?: boolean }[] = [
-            { title: 'Order Placed', time: order.createdAt || 'Pending', completed: true },
-            { title: 'Processing', time: '-', completed: order.status !== 'pending' },
-            { title: 'In Transit', time: '-', completed: order.status === 'shipping' || order.status === 'delivered' },
-            { title: 'Delivered', time: '-', completed: order.status === 'delivered' },
-        ];
-
-        // Mark current
-        let foundCurrent = false;
-        for (let i = steps.length - 1; i >= 0; i--) {
-            if (steps[i].completed && !foundCurrent) {
-                steps[i].current = true; // Actually current is usually the first incomplete or last completed?
-                // Visual logic: current is the active one.
-                // If "Processing" is completed, but "In Transit" is not, then "In Transit" is current status?
-                // Let's simplified:
-            }
-        }
-        return steps;
-    };
-
-    const steps = order.timeline || getSteps();
-    const currentStepIndex = steps.findIndex((s: any) => s.current) !== -1 ? steps.findIndex((s: any) => s.current) : steps.length - 1;
-    const progress = (currentStepIndex / (steps.length - 1)) * 100;
+    // Use timeline from backend
+    const steps = order.timeline || [];
+    const currentStepIndex = steps.findIndex((s: any) => s.current) !== -1 ? steps.findIndex((s: any) => s.current) : (steps.length > 0 ? steps.length - 1 : 0);
+    const progress = steps.length > 1 ? (currentStepIndex / (steps.length - 1)) * 100 : 0;
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>

@@ -60,6 +60,7 @@ type AuthContextType = {
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
     completeOnboarding: () => Promise<void>;
+    token: string | null;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -79,6 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
+    const [token, setToken] = useState<string | null>(null);
     const router = useRouter();
     const segments = useSegments();
 
@@ -89,15 +91,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const loadUser = async () => {
             try {
                 // Parallelize startup tasks
-                const [onboarding, token] = await Promise.all([
+                const [onboarding, storedToken] = await Promise.all([
                     SecureStore.getItemAsync('hasSeenOnboarding'),
                     SecureStore.getItemAsync('token'),
                 ]);
 
                 setHasSeenOnboarding(onboarding === 'true');
 
-                if (token) {
-                    setAuthToken(token);
+                if (storedToken) {
+                    setToken(storedToken);
+                    setAuthToken(storedToken);
                     // Fetch user info - we don't block isLoading on this if we want fastest splash hide,
                     // but we need the user object for initial routing. Let's parallelize the rest.
                     const { data } = await authAPI.getMe();
@@ -223,8 +226,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         register,
         logout,
         refreshUser,
-        completeOnboarding
-    }), [user, isLoading, hasSeenOnboarding, login, register, logout, refreshUser, completeOnboarding]);
+        completeOnboarding,
+        token
+    }), [user, isLoading, hasSeenOnboarding, login, register, logout, refreshUser, completeOnboarding, token]);
 
     return (
         <AuthContext.Provider value={value}>

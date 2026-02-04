@@ -373,7 +373,7 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
         >
             <View style={styles.modalOverlay}>
                 <TouchableOpacity style={styles.modalCloseArea} onPress={onClose} />
-                <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+                <View style={styles.modalContent}>
                     <View style={styles.modalHeader}>
                         <Text style={styles.modalTitle}>{comments.length} Comments</Text>
                         <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -382,17 +382,15 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
                     </View>
 
                     <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                         style={{ flex: 1 }}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
                     >
                         <FlatList
                             data={comments}
                             keyExtractor={item => item._id}
                             renderItem={({ item }) => {
                                 const isCommentAuthor = currentUser?._id === (item.userId?._id || item.userId);
-                                // For reels, the post author is item.user in ReelItem, but we don't have it here easily
-                                // Let's assume we can't easily check isPostAuthor without passing post author prop
                                 return (
                                     <View style={styles.commentItemContainer}>
                                         <View style={styles.commentItem}>
@@ -488,7 +486,7 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
                             </View>
                         )}
 
-                        <View style={styles.commentInputContainer}>
+                        <View style={[styles.commentInputContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                             <TextInput
                                 ref={inputRef}
                                 style={styles.commentInput}

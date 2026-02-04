@@ -465,6 +465,7 @@ export const chatAPI = {
     editMessage: (messageId: string, content: string) => apiClient.put(`/chat/messages/${messageId}`, { content }),
     deleteMessage: (messageId: string) => apiClient.delete(`/chat/messages/${messageId}`),
     reactToMessage: (messageId: string, emoji: string) => apiClient.post(`/chat/messages/${messageId}/react`, { emoji }),
+    markAsRead: (conversationId: string, messageIds?: string[]) => apiClient.post('/chat/messages/mark-read', { conversationId, messageIds }),
 
     // Group Features
     createGroup: (data: { name: string; description?: string; avatar?: string; initialMembers?: string[] }) =>

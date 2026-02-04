@@ -1,4 +1,5 @@
 import CustomLoader from '@/components/CustomLoader';
+import MessageStatus from '@/components/MessageStatus';
 import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -50,10 +51,11 @@ interface Message {
     marketItem?: any;
     transfer?: any;
     transactionId?: any;
+    readBy?: Array<{ userId: string; readAt: string }>;
 }
 
 export default function ChatScreen() {
-    const { id } = useLocalSearchParams();
+    const { id, marketItemId } = useLocalSearchParams();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const colorScheme = useColorScheme();
@@ -64,6 +66,9 @@ export default function ChatScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [inputText, setInputText] = useState('');
     const [isOnline, setIsOnline] = useState(false);
+
+    // Market Context
+    const [contextMarketItem, setContextMarketItem] = useState<any>(null);
     const [isTyping, setIsTyping] = useState(false);
     const typingTimeoutRef = useRef<any>(null);
 
@@ -132,6 +137,20 @@ export default function ChatScreen() {
                     timestamp: new Date(m.createdAt || m.timestamp)
                 }));
                 setMessages(formattedMessages);
+                setMessages(formattedMessages);
+
+                // Fetch market item if present
+                if (marketItemId) {
+                    try {
+                        // We need an endpoint for public access if possible, or just use get item
+                        // Assuming marketAPI is imported
+                        const { marketAPI } = require('@/utils/apiClient');
+                        const { data } = await marketAPI.getItem(marketItemId as string);
+                        setContextMarketItem(data);
+                    } catch (err) {
+                        console.log('Error fetching context item:', err);
+                    }
+                }
             } catch (error) {
                 console.log('Error fetching chat:', error);
                 // Fallback for demo if API fails
@@ -143,7 +162,24 @@ export default function ChatScreen() {
         if (currentUser && id) {
             fetchChatData();
         }
-    }, [id, currentUser]);
+    }, [id, currentUser, marketItemId]);
+
+    // Mark as read when messages load or screen focuses
+    React.useEffect(() => {
+        if (activeConversationId && messages.length > 0 && currentUser) {
+            const unreadMessages = messages.filter(m =>
+                m.senderId !== currentUser._id &&
+                !m.readBy?.some(r => r.userId === currentUser._id) &&
+                !m.isRead // Fallback
+            );
+
+            if (unreadMessages.length > 0) {
+                // Determine if we should mark all or specific
+                // For simplicity, let's mark all for this conversation if we are here
+                chatAPI.markAsRead(activeConversationId);
+            }
+        }
+    }, [activeConversationId, messages.length, currentUser]);
 
     // Socket Listener for Status & Messages
     React.useEffect(() => {
@@ -233,6 +269,11 @@ export default function ChatScreen() {
             setMessages(prev => prev.filter(m => m._id !== messageId && m.id !== messageId));
         };
 
+        const handleMessageReact = ({ messageId, reactions }: { messageId: string, reactions: any[] }) => {
+            console.log('📩 [ChatScreen] Reactions updated via socket:', messageId, reactions);
+            setMessages(prev => prev.map(m => (m._id === messageId || m.id === messageId) ? { ...m, reactions } : m));
+        };
+
         const handleConversationUpdated = (updatedConv: any) => {
             if (updatedConv.id === activeConversationId || updatedConv._id === activeConversationId) {
                 console.log('🔄 [ChatScreen] Active conversation updated:', updatedConv);
@@ -245,9 +286,41 @@ export default function ChatScreen() {
             }
         };
 
-        const handleMessageReact = ({ messageId, reactions }: { messageId: string, reactions: any[] }) => {
-            console.log('📩 [ChatScreen] Reactions updated via socket:', messageId, reactions);
-            setMessages(prev => prev.map(m => (m._id === messageId || m.id === messageId) ? { ...m, reactions } : m));
+        const handleReadUpdate = ({ conversationId, readerId, readAt }: any) => {
+            if (conversationId !== activeConversationId) return;
+            console.log('👀 [ChatScreen] Messages read by:', readerId);
+
+            setMessages(prev => prev.map(msg => {
+                // If I am the sender, and someone read it, update my view
+                if (msg.senderId === currentUser?._id) {
+                    const existingReads = msg.readBy || [];
+                    if (!existingReads.some(r => r.userId === readerId)) {
+                        return {
+                            ...msg,
+                            readBy: [...existingReads, { userId: readerId, readAt }]
+                        };
+                    }
+                }
+                return msg;
+            }));
+        };
+
+        const handleReadAll = ({ conversationId, readerId, readAt }: any) => {
+            if (conversationId !== activeConversationId) return;
+            console.log('👀 [ChatScreen] All messages read by:', readerId);
+
+            setMessages(prev => prev.map(msg => {
+                if (msg.senderId === currentUser?._id) {
+                    const existingReads = msg.readBy || [];
+                    if (!existingReads.some(r => r.userId === readerId)) {
+                        return {
+                            ...msg,
+                            readBy: [...existingReads, { userId: readerId, readAt }]
+                        };
+                    }
+                }
+                return msg;
+            }));
         };
 
         socket.on('user:online', handleOnline);
@@ -259,6 +332,8 @@ export default function ChatScreen() {
         socket.on('message:react', handleMessageReact);
         socket.on('typing:indicator', handleTypingIndicator);
         socket.on('conversation:updated', handleConversationUpdated);
+        socket.on('message:read_update', handleReadUpdate);
+        socket.on('message:read_all', handleReadAll);
 
         return () => {
             socket.emit('conversation:leave', activeConversationId);
@@ -271,6 +346,8 @@ export default function ChatScreen() {
             socket.off('message:react', handleMessageReact);
             socket.off('typing:indicator', handleTypingIndicator);
             socket.off('conversation:updated', handleConversationUpdated);
+            socket.off('message:read_update', handleReadUpdate);
+            socket.off('message:read_all', handleReadAll);
             socket.off('connect', joinRoom);
             socket.off('reconnect', joinRoom);
         };
@@ -495,23 +572,26 @@ export default function ChatScreen() {
             _id: optimisticId,
             content,
             text: content,
-            type: 'text',
+            type: contextMarketItem ? 'market_item' : 'text',
             senderId: currentUser?._id || 'temp',
             timestamp: new Date(),
             createdAt: new Date().toISOString(),
-            replyTo: replyingTo?._id || replyingTo?.id || null
+            replyTo: replyingTo?._id || replyingTo?.id || null,
+            marketItem: contextMarketItem || null
         };
 
         setMessages(prev => [...prev, optimisticMessage]);
         setInputText('');
         setReplyingTo(null);
+        setContextMarketItem(null); // Clear after sending
 
         try {
             const targetId = activeConversationId || id as string;
             await chatAPI.sendMessage(targetId, {
                 content,
-                type: 'text',
-                replyTo: optimisticMessage.replyTo
+                type: optimisticMessage.type, // 'text' or 'market_item'
+                replyTo: optimisticMessage.replyTo,
+                marketItem: optimisticMessage.marketItem?._id
             });
         } catch (error: any) {
             console.log('Error sending message:', error);
@@ -620,8 +700,30 @@ export default function ChatScreen() {
                 }}
                 onTransferAction={(action) => handleTransferAction(item._id || item.id!, action)}
                 showSenderName={otherUser?.type === 'group'}
+                status={getMessageStatus(item)}
             />
         );
+    };
+
+    const getMessageStatus = (item: Message): 'sent' | 'delivered' | 'read' => {
+        if (!item.readBy || item.readBy.length === 0) {
+            // Fallback to isRead for Delivered vs Sent check? 
+            // Ideally we need 'isDelivered' from backend but let's assume if we have it here, it's sent.
+            // If we want 'delivered' logic we need a socket event 'message:delivered' which we haven't implemented yet.
+            // So for now: 1 tick = sent to server.
+            return 'sent';
+        }
+
+        // Check if read by others
+        const readByOthers = item.readBy.filter(r => r.userId !== currentUser?._id);
+
+        if (readByOthers.length > 0) {
+            // In 1-on-1: if readByOthers > 0 -> read
+            // In Group: if readByOthers > 0 -> read (simplification)
+            return 'read';
+        }
+
+        return 'sent'; // Default
     };
 
     // If loading or otherUser missing, render minimal UI but keep hooks consistent
@@ -715,6 +817,19 @@ export default function ChatScreen() {
                     paddingBottom: Math.max(insets.bottom, 15),
                     borderTopColor: colors.border
                 }]}>
+                    {contextMarketItem && !replyingTo && !isEditing && (
+                        <View style={styles.marketPreview}>
+                            <Image source={{ uri: contextMarketItem.images[0] }} style={styles.marketImage} />
+                            <View style={styles.marketInfo}>
+                                <Text style={[styles.marketTitle, { color: colors.text }]} numberOfLines={1}>{contextMarketItem.title}</Text>
+                                <Text style={[styles.marketPrice, { color: colors.primary }]}>₦{contextMarketItem.price.toLocaleString()}</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setContextMarketItem(null)}>
+                                <Ionicons name="close-circle" size={24} color={colors.subtext} />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
                     {replyingTo && (
                         <View style={[styles.replyPreview, { backgroundColor: colorScheme === 'dark' ? '#262626' : '#F5F5F5' }]}>
                             <View style={[styles.replyBar, { backgroundColor: colors.primary }]} />
@@ -853,7 +968,7 @@ export default function ChatScreen() {
 
 // ============ SUB-COMPONENTS ============
 
-const MessageItem = ({ item, isMe, onReply, onReact, onLongPress, onTransferAction, showSenderName }: { item: Message, isMe: boolean, onReply: () => void, onReact: (emoji: string) => void, onLongPress: () => void, onTransferAction: (action: 'accept' | 'reject') => void, showSenderName?: boolean }) => {
+const MessageItem = ({ item, isMe, onReply, onReact, onLongPress, onTransferAction, showSenderName, status }: { item: Message, isMe: boolean, onReply: () => void, onReact: (emoji: string) => void, onLongPress: () => void, onTransferAction: (action: 'accept' | 'reject') => void, showSenderName?: boolean, status: 'sent' | 'delivered' | 'read' }) => {
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
     const { user: currentUser } = useAuth();
@@ -1054,7 +1169,7 @@ const MessageItem = ({ item, isMe, onReply, onReact, onLongPress, onTransferActi
                             </View>
                         )}
 
-                        {item.content && item.type !== 'transfer' && (
+                        {item.content && item.type !== 'transfer' && item.type !== 'voice' && item.content !== 'Sent an image' && (
                             <Text style={[
                                 styles.messageText,
                                 { color: isMe ? '#fff' : colors.text }
@@ -1063,12 +1178,15 @@ const MessageItem = ({ item, isMe, onReply, onReact, onLongPress, onTransferActi
                             </Text>
                         )}
 
-                        <Text style={[
-                            styles.timestamp,
-                            { color: isMe ? 'rgba(255,255,255,0.7)' : colors.subtext }
-                        ]}>
-                            {format(new Date(item.createdAt || Date.now()), 'HH:mm')}
-                        </Text>
+                        <View style={styles.footerContainer}>
+                            <Text style={[
+                                styles.timestamp,
+                                { color: isMe ? 'rgba(255,255,255,0.7)' : colors.subtext }
+                            ]}>
+                                {format(new Date(item.createdAt || Date.now()), 'HH:mm')}
+                            </Text>
+                            <MessageStatus status={status} isMe={isMe} color={isMe ? 'rgba(255,255,255,0.7)' : undefined} />
+                        </View>
 
                         {item.reactions && item.reactions.length > 0 && (
                             <View style={styles.reactionsContainer}>
@@ -1169,7 +1287,6 @@ const styles = StyleSheet.create({
     },
     messageBubble: {
         minWidth: 100,
-        maxWidth: '80%',
         paddingHorizontal: 14,
         paddingVertical: 10,
         borderRadius: 18,
@@ -1192,6 +1309,12 @@ const styles = StyleSheet.create({
         marginTop: 4,
         alignSelf: 'flex-end',
     },
+    footerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        marginTop: 4,
+    },
     messageImage: {
         width: Dimensions.get('window').width * 0.6,
         height: 200,
@@ -1199,10 +1322,10 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     voiceMessage: {
+        width: Dimensions.get('window').width * 0.6,
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: 5,
-        minWidth: 150,
     },
     messageReplyPreview: {
         padding: 8,
