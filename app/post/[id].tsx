@@ -152,7 +152,7 @@ export default function PostDetailScreen() {
         );
     }
 
-    const handleBack = () => router.back();
+    const handleBack = () => router.canGoBack() ? router.back() : router.replace('/(tabs)');
 
     const handleLike = async () => {
         const prevLiked = liked;
@@ -217,7 +217,7 @@ export default function PostDetailScreen() {
         setMenuVisible(false);
         try {
             await postAPI.notInterested(id as string);
-            router.back(); // Usually, if you're not interested, you want to leave the page
+            router.canGoBack() ? router.back() : router.replace('/(tabs)'); // Usually, if you're not interested, you want to leave the page
         } catch (error) {
             console.log('Error marking as not interested:', error);
         }
@@ -337,8 +337,24 @@ export default function PostDetailScreen() {
         }
     };
 
-    const getRelativeTime = (timestamp: string) => {
-        return new Date(timestamp).toLocaleDateString();
+    const getRelativeTime = (time: string | Date) => {
+        if (!time) return '';
+        try {
+            const date = new Date(time);
+            if (isNaN(date.getTime())) return '';
+
+            const now = new Date();
+            const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+            if (diffInSeconds < 60) return 'Just now';
+            if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+            if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+            if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        } catch (error) {
+            return '';
+        }
     };
 
     const getInitials = (name: string) => {
@@ -501,7 +517,7 @@ export default function PostDetailScreen() {
                         )}
 
                         <Text style={[styles.timestamp, { color: colors.subtext }]}>
-                            {new Date(post.createdAt).toLocaleString()} • <Text style={{ fontWeight: 'bold', color: colors.text }}>{sharesCount}</Text> Shares
+                            {getRelativeTime(post.createdAt || post.timestamp)} • <Text style={{ fontWeight: 'bold', color: colors.text }}>{sharesCount}</Text> Shares
                         </Text>
 
                         <View style={[styles.statsRow, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>

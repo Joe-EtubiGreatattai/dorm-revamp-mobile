@@ -1,5 +1,4 @@
 import CustomLoader from '@/components/CustomLoader';
-import MessageStatus from '@/components/MessageStatus';
 import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -52,6 +51,8 @@ interface Message {
     transfer?: any;
     transactionId?: any;
     readBy?: Array<{ userId: string; readAt: string }>;
+    isAIReply?: boolean;
+    aiName?: string;
 }
 
 export default function ChatScreen() {
@@ -88,6 +89,9 @@ export default function ChatScreen() {
     const [actionMessage, setActionMessage] = useState<Message | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+    const [isMyAIEnabled, setIsMyAIEnabled] = useState(false);
+    const [isOtherAIEnabled, setIsOtherAIEnabled] = useState(false);
+    const [isTogglingAI, setIsTogglingAI] = useState(false);
 
     React.useEffect(() => {
         const fetchChatData = async () => {
@@ -137,7 +141,9 @@ export default function ChatScreen() {
                     timestamp: new Date(m.createdAt || m.timestamp)
                 }));
                 setMessages(formattedMessages);
-                setMessages(formattedMessages);
+
+                setIsMyAIEnabled(conversation.aiEnabledFor?.some((uid: any) => (uid._id || uid).toString() === currentUser?._id) || false);
+                setIsOtherAIEnabled(conversation.aiEnabledFor?.some((uid: any) => (uid._id || uid).toString() === other?._id?.toString() || (uid._id || uid).toString() === other?.id?.toString()) || false);
 
                 // Fetch market item if present
                 if (marketItemId) {
@@ -668,6 +674,21 @@ export default function ChatScreen() {
         }
     };
 
+    const handleToggleAI = async () => {
+        if (!activeConversationId || isTogglingAI) return;
+        setIsTogglingAI(true);
+        try {
+            const { data } = await chatAPI.toggleAIChat(activeConversationId);
+            setIsMyAIEnabled(data.enabled);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } catch (error) {
+            console.log('Error toggling AI:', error);
+            Alert.alert('Error', 'Failed to toggle AI for this chat');
+        } finally {
+            setIsTogglingAI(false);
+        }
+    };
+
     const renderMessage = ({ item }: { item: Message }) => {
         const repliedMessage = typeof item.replyTo === 'string'
             ? messages.find(m => m._id === item.replyTo || m.id === item.replyTo)
@@ -770,8 +791,15 @@ export default function ChatScreen() {
                         )}
                         {otherUser?.type !== 'group' && isOnline && <View style={styles.onlineBadge} />}
                     </View>
-                    <View>
-                        <Text style={styles.userName}>{otherUser?.type === 'group' ? otherUser.groupMetadata?.name : (otherUser?.name || 'User')}</Text>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={styles.userName} numberOfLines={1}>
+                                {otherUser?.type === 'group' ? otherUser.groupMetadata?.name : (otherUser?.name || 'User')}
+                            </Text>
+                            {isOtherAIEnabled && (
+                                <Ionicons name="sparkles" size={12} color={colors.primary} />
+                            )}
+                        </View>
                         <Text style={[styles.userStatus, { color: (otherUser?.type !== 'group' && isOnline) ? '#4ADE80' : colors.subtext }]}>
                             {otherUser?.type === 'group' ? `${otherUser.participants?.length || 0} members` : (isOnline ? 'Online' : 'Offline')}
                         </Text>
@@ -779,11 +807,19 @@ export default function ChatScreen() {
                 </TouchableOpacity>
 
                 <View style={styles.headerActions}>
+                    <TouchableOpacity onPress={handleToggleAI} disabled={isTogglingAI} style={styles.actionButton}>
+                        {isTogglingAI ? (
+                            <ActivityIndicator size="small" color={colors.primary} />
+                        ) : (
+                            <Ionicons
+                                name={isMyAIEnabled ? "sparkles" : "sparkles-outline"}
+                                size={22}
+                                color={isMyAIEnabled ? colors.primary : colors.text}
+                            />
+                        )}
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={handleCallThrottled} style={styles.actionButton}>
                         <Ionicons name="call-outline" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionButton}>
-                        <Ionicons name="videocam-outline" size={24} color={colors.text} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -968,105 +1004,54 @@ export default function ChatScreen() {
 
 // ============ SUB-COMPONENTS ============
 
+const MessageStatus = ({ status, color, size = 16 }: { status: 'sent' | 'delivered' | 'read', color: string, size?: number }) => {
+    switch (status) {
+        case 'read':
+            return <Ionicons name="checkmark-done" size={size} color="#4ADE80" />;
+        case 'delivered':
+            return <Ionicons name="checkmark-done" size={size} color={color} />;
+        case 'sent':
+            return <Ionicons name="checkmark" size={size} color={color} />;
+        default:
+            return null;
+    }
+};
+
 const MessageItem = ({ item, isMe, onReply, onReact, onLongPress, onTransferAction, showSenderName, status }: { item: Message, isMe: boolean, onReply: () => void, onReact: (emoji: string) => void, onLongPress: () => void, onTransferAction: (action: 'accept' | 'reject') => void, showSenderName?: boolean, status: 'sent' | 'delivered' | 'read' }) => {
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
     const { user: currentUser } = useAuth();
-    const swipeableRef = useRef<Swipeable>(null);
-
-    const [sender, setSender] = React.useState<any>(null);
-
-    React.useEffect(() => {
-        if (showSenderName && !isMe && item.senderId) {
-            authAPI.getUserProfile(item.senderId).then(({ data }: any) => setSender(data)).catch(() => { });
-        }
-    }, [item.senderId, showSenderName, isMe]);
     const router = useRouter();
 
-    // Voice Note States
-    const [sound, setSound] = useState<Audio.Sound | null>(null);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [isLoaded, setIsLoaded] = useState(false);
-    const [playbackProgress, setPlaybackProgress] = useState(0); // 0 to 1
-
-    const renderRightActions = () => (
-        <View style={styles.replyActionContainer}>
-            <Ionicons name="arrow-undo" size={24} color={colors.subtext} />
-        </View>
-    );
-
-    const onSwipeOpen = () => {
-        swipeableRef.current?.close();
-        onReply();
-    };
-
-    // Voice Player Logic
-    React.useEffect(() => {
-        if (item.type === 'voice' && item.mediaUrl) {
-            loadSound();
-        }
-        return () => {
-            if (sound) {
-                sound.unloadAsync();
-            }
-        };
-    }, [item.mediaUrl]);
-
-    async function loadSound() {
-        try {
-            const { sound: newSound } = await Audio.Sound.createAsync(
-                { uri: item.mediaUrl! },
-                { shouldPlay: false },
-                onPlaybackStatusUpdate
-            );
-            setSound(newSound);
-            setIsLoaded(true);
-        } catch (error) {
-            console.log('Error loading sound:', error);
-        }
-    }
-
-    const onPlaybackStatusUpdate = (status: any) => {
-        if (status.isLoaded) {
-            setIsPlaying(status.isPlaying);
-            if (status.durationMillis) {
-                setPlaybackProgress(status.positionMillis / status.durationMillis);
-            }
-            if (status.didJustFinish) {
-                setPlaybackProgress(0);
-                setIsPlaying(false);
-            }
-        }
-    };
-
-    const togglePlayback = async () => {
-        if (!sound || !isLoaded) return;
-
-        if (isPlaying) {
-            await sound.pauseAsync();
-        } else {
-            if (playbackProgress >= 1 || playbackProgress === 0) {
-                await sound.setPositionAsync(0);
-            }
-            await sound.playAsync();
-        }
-    };
+    const senderName = typeof item.senderId === 'object' ? (item.senderId as any).name : 'User';
 
     return (
         <Swipeable
-            ref={swipeableRef}
-            // Reversed direction: If isMe, show right actions (swipe left). If !isMe, show left actions (swipe right).
-            renderRightActions={isMe ? renderRightActions : undefined}
-            renderLeftActions={isMe ? undefined : renderRightActions}
-            onSwipeableOpen={onSwipeOpen}
+            renderRightActions={() => (
+                <View style={styles.replyActionContainer}>
+                    <Ionicons name="arrow-undo" size={24} color={colors.subtext} />
+                </View>
+            )}
+            onSwipeableWillOpen={onReply}
         >
-            <Pressable
+            <TouchableOpacity
                 onLongPress={onLongPress}
+                activeOpacity={0.8}
                 style={[styles.messageRow, isMe ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}
             >
                 <View style={styles.bubbleWrapper}>
-                    {!isMe && showSenderName && sender && (
-                        <Text style={[styles.senderName, { color: colors.primary }]}>{sender.name}</Text>
+                    {showSenderName && !isMe && (
+                        <Text style={[styles.senderName, { color: colors.primary }]}>
+                            {senderName}
+                        </Text>
+                    )}
+                    {item.isAIReply && (
+                        <View style={[styles.aiBadge, { backgroundColor: colors.primary + '20' }]}>
+                            <Ionicons name="sparkles" size={10} color={colors.primary} />
+                            <Text style={[styles.aiBadgeText, { color: colors.primary }]}>
+                                {item.aiName || 'AI'}
+                            </Text>
+                        </View>
                     )}
                     <View style={[
                         styles.messageBubble,
@@ -1074,9 +1059,9 @@ const MessageItem = ({ item, isMe, onReply, onReact, onLongPress, onTransferActi
                         { backgroundColor: isMe ? colors.primary : colors.card }
                     ]}>
                         {item.replyTo && (
-                            <View style={[styles.messageReplyPreview, { backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
-                                <Text numberOfLines={1} style={[styles.replyPreviewText, { color: isMe ? '#fff' : colors.text, opacity: 0.7 }]}>
-                                    {typeof item.replyTo === 'object' ? (item.replyTo.content || 'Media') : 'Replying...'}
+                            <View style={[styles.messageReplyPreview, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                                <Text numberOfLines={1} style={[styles.replyPreviewText, { color: isMe ? '#fff' : colors.text, opacity: 0.8 }]}>
+                                    {item.replyTo.content}
                                 </Text>
                             </View>
                         )}
@@ -1084,18 +1069,12 @@ const MessageItem = ({ item, isMe, onReply, onReact, onLongPress, onTransferActi
                         {item.type === 'market_item' && item.marketItem && (
                             <TouchableOpacity
                                 onPress={() => router.push(`/market/${item.marketItem._id || item.marketItem.id}`)}
-                                style={styles.marketPreview}
+                                style={[styles.marketPreview, { backgroundColor: 'rgba(255,255,255,0.1)' }]}
                             >
-                                {item.marketItem.images?.[0] && (
-                                    <Image source={{ uri: item.marketItem.images[0] }} style={styles.marketImage} />
-                                )}
+                                <Image source={{ uri: item.marketItem.images?.[0] }} style={styles.marketImage} />
                                 <View style={styles.marketInfo}>
-                                    <Text style={[styles.marketTitle, { color: isMe ? '#fff' : colors.text }]} numberOfLines={1}>
-                                        {item.marketItem.title}
-                                    </Text>
-                                    <Text style={[styles.marketPrice, { color: isMe ? '#fff' : colors.primary }]}>
-                                        ₦{item.marketItem.price?.toLocaleString()}
-                                    </Text>
+                                    <Text style={[styles.marketTitle, { color: isMe ? '#fff' : colors.text }]} numberOfLines={1}>{item.marketItem.title}</Text>
+                                    <Text style={[styles.marketPrice, { color: isMe ? '#fff' : colors.primary }]}>₦{item.marketItem.price?.toLocaleString()}</Text>
                                 </View>
                             </TouchableOpacity>
                         )}
@@ -1104,94 +1083,73 @@ const MessageItem = ({ item, isMe, onReply, onReact, onLongPress, onTransferActi
                             <Image source={{ uri: item.mediaUrl }} style={styles.messageImage} contentFit="cover" />
                         )}
 
-                        {item.type === 'voice' && (
-                            <View style={styles.voiceMessage}>
-                                <TouchableOpacity onPress={togglePlayback} disabled={!isLoaded}>
-                                    {!isLoaded ? (
-                                        <ActivityIndicator size="small" color={isMe ? '#fff' : colors.primary} />
-                                    ) : (
-                                        <Ionicons name={isPlaying ? "pause" : "play"} size={24} color={isMe ? '#fff' : colors.primary} />
-                                    )}
-                                </TouchableOpacity>
-                                <View style={styles.voiceProgressContainer}>
-                                    <View style={[styles.voiceProgressBar, { backgroundColor: isMe ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)' }]} />
-                                    <View
-                                        style={[
-                                            styles.voiceProgressFill,
-                                            {
-                                                backgroundColor: isMe ? '#fff' : colors.primary,
-                                                width: `${playbackProgress * 100}%`
-                                            }
-                                        ]}
-                                    />
-                                </View>
-                            </View>
+                        {item.type === 'text' && (
+                            <Text style={[styles.messageText, { color: isMe ? '#fff' : colors.text }]}>
+                                {item.content}
+                            </Text>
                         )}
 
-                        {item.type === 'transfer' && (
-                            <View style={styles.transferContainer}>
+                        {item.type === 'transfer' && (item.transfer || item.transactionId) && (
+                            <View style={[styles.transferContainer, { backgroundColor: 'rgba(0,0,0,0.05)' }]}>
                                 <View style={styles.transferHeader}>
-                                    <Ionicons name="cash-outline" size={20} color={isMe ? '#fff' : colors.primary} />
-                                    <Text style={[styles.transferTitle, { color: isMe ? '#fff' : colors.text }]}>Transfer</Text>
+                                    <Ionicons name="wallet" size={20} color={isMe ? '#fff' : colors.primary} />
+                                    <Text style={[styles.transferTitle, { color: isMe ? '#fff' : colors.text }]}>Money Transfer</Text>
                                 </View>
                                 <Text style={[
                                     styles.transferAmount,
                                     { color: isMe ? '#fff' : colors.text },
-                                    (item.transactionId?.status === 'rejected' || item.transfer?.status === 'rejected') && styles.rejectedAmount
+                                    (item.transfer?.status === 'rejected' || item.transactionId?.status === 'rejected') && styles.rejectedAmount
                                 ]}>
-                                    ₦{Math.abs(item.transactionId?.amount || item.transfer?.amount || 0).toLocaleString()}
+                                    ₦{(item.transfer?.amount || item.transactionId?.amount)?.toLocaleString()}
                                 </Text>
-                                <View style={[
-                                    styles.statusBadge,
-                                    { backgroundColor: (item.transactionId?.status === 'completed' || item.transfer?.status === 'completed') ? '#4ADE80' : (item.transactionId?.status === 'rejected' || item.transfer?.status === 'rejected') ? '#FF3B30' : '#FFD700' }
-                                ]}>
-                                    <Text style={styles.statusBadgeText}>
-                                        {(item.transactionId?.status || item.transfer?.status || 'pending').replace('_', ' ').toUpperCase()}
-                                    </Text>
-                                </View>
 
-                                {((item.transactionId?.status || item.transfer?.status || 'pending') === 'pending_acceptance' || (item.transactionId?.status || item.transfer?.status) === 'pending') && !isMe && (
-                                    <View style={styles.transferActions}>
-                                        <TouchableOpacity
-                                            style={[styles.transferActionBtn, { backgroundColor: '#4ADE80' }]}
-                                            onPress={() => onTransferAction('accept')}
-                                        >
-                                            <Text style={styles.transferActionText}>Accept</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={[styles.transferActionBtn, { backgroundColor: '#FF3B30' }]}
-                                            onPress={() => onTransferAction('reject')}
-                                        >
-                                            <Text style={styles.transferActionText}>Reject</Text>
-                                        </TouchableOpacity>
+                                {!(item.transfer?.status === 'completed' || item.transactionId?.status === 'completed' ||
+                                    item.transfer?.status === 'rejected' || item.transactionId?.status === 'rejected') && !isMe && (
+                                        <View style={styles.transferActions}>
+                                            <TouchableOpacity
+                                                onPress={() => onTransferAction('accept')}
+                                                style={[styles.transferActionBtn, { backgroundColor: '#10b981' }]}
+                                            >
+                                                <Text style={styles.transferActionText}>Accept</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={() => onTransferAction('reject')}
+                                                style={[styles.transferActionBtn, { backgroundColor: '#ef4444' }]}
+                                            >
+                                                <Text style={styles.transferActionText}>Reject</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
+
+                                {(item.transfer?.status === 'completed' || item.transactionId?.status === 'completed') && (
+                                    <View style={[styles.statusBadge, { backgroundColor: '#10b981' }]}>
+                                        <Text style={styles.statusBadgeText}>Accepted</Text>
+                                    </View>
+                                )}
+
+                                {(item.transfer?.status === 'rejected' || item.transactionId?.status === 'rejected') && (
+                                    <View style={[styles.statusBadge, { backgroundColor: '#ef4444' }]}>
+                                        <Text style={styles.statusBadgeText}>Rejected</Text>
                                     </View>
                                 )}
                             </View>
                         )}
 
-                        {item.content && item.type !== 'transfer' && item.type !== 'voice' && item.content !== 'Sent an image' && (
-                            <Text style={[
-                                styles.messageText,
-                                { color: isMe ? '#fff' : colors.text }
-                            ]}>
-                                {item.content}
-                            </Text>
-                        )}
-
                         <View style={styles.footerContainer}>
-                            <Text style={[
-                                styles.timestamp,
-                                { color: isMe ? 'rgba(255,255,255,0.7)' : colors.subtext }
-                            ]}>
-                                {format(new Date(item.createdAt || Date.now()), 'HH:mm')}
+                            <Text style={[styles.timestamp, { color: isMe ? 'rgba(255,255,255,0.7)' : colors.subtext }]}>
+                                {format(new Date(item.createdAt || item.timestamp || Date.now()), 'HH:mm')}
                             </Text>
-                            <MessageStatus status={status} isMe={isMe} color={isMe ? 'rgba(255,255,255,0.7)' : undefined} />
+                            {isMe && (
+                                <View style={{ marginLeft: 4 }}>
+                                    <MessageStatus status={status} color={isMe ? 'rgba(255,255,255,0.8)' : colors.primary} size={14} />
+                                </View>
+                            )}
                         </View>
 
                         {item.reactions && item.reactions.length > 0 && (
                             <View style={styles.reactionsContainer}>
                                 {item.reactions.map((r, i) => (
-                                    <View key={i} style={[styles.reactionBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                    <View key={i} style={styles.reactionBadge}>
                                         <Text style={styles.reactionEmoji}>{r.emoji}</Text>
                                     </View>
                                 ))}
@@ -1199,7 +1157,7 @@ const MessageItem = ({ item, isMe, onReply, onReact, onLongPress, onTransferActi
                         )}
                     </View>
                 </View>
-            </Pressable>
+            </TouchableOpacity>
         </Swipeable>
     );
 };
@@ -1595,5 +1553,20 @@ const styles = StyleSheet.create({
         fontFamily: 'PlusJakartaSans_700Bold',
         marginBottom: 4,
         marginLeft: 4,
+    },
+    aiBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+        marginBottom: 4,
+        marginLeft: 4,
+        gap: 4,
+    },
+    aiBadgeText: {
+        fontSize: 10,
+        fontFamily: 'PlusJakartaSans_700Bold',
     },
 });

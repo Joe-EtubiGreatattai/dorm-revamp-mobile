@@ -249,7 +249,7 @@ export default function MaterialDetail() {
                 <View style={[styles.headerOverlay, { position: 'relative', top: 0, paddingBottom: 20 }]}>
                     <TouchableOpacity
                         style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
-                        onPress={() => router.back()}
+                        onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
                     >
                         <Ionicons name="arrow-back" size={24} color={colors.text} />
                     </TouchableOpacity>
@@ -261,7 +261,7 @@ export default function MaterialDetail() {
                         The material you're looking for might have been removed or moved to another faculty.
                     </Text>
                     <TouchableOpacity
-                        onPress={() => router.back()}
+                        onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
                         style={[styles.downloadBtn, { marginTop: 32, width: '100%', backgroundColor: colors.primary }]}
                     >
                         <Text style={styles.downloadBtnText}>Explore Other Materials</Text>
@@ -359,7 +359,7 @@ export default function MaterialDetail() {
             <View style={[styles.customHeader, { borderBottomColor: colors.border }]}>
                 <TouchableOpacity
                     style={styles.headerActionBtn}
-                    onPress={() => router.back()}
+                    onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
                 >
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>

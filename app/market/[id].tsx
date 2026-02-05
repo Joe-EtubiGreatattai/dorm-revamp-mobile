@@ -105,7 +105,7 @@ export default function MarketItemDetail() {
                 <Stack.Screen options={{ headerShown: false }} />
                 <View style={{ padding: 20, alignItems: 'center' }}>
                     <Text style={{ color: colors.text }}>Item not found</Text>
-                    <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20 }}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={{ marginTop: 20 }}>
                         <Text style={{ color: colors.primary }}>Go Back</Text>
                     </TouchableOpacity>
                 </View>
@@ -216,7 +216,7 @@ export default function MarketItemDetail() {
 
                     <TouchableOpacity
                         style={[styles.backBtn, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
-                        onPress={() => router.back()}
+                        onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
                     >
                         <Ionicons name="arrow-back" size={24} color="#fff" />
                     </TouchableOpacity>

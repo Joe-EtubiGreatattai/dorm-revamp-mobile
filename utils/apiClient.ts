@@ -466,6 +466,7 @@ export const chatAPI = {
     deleteMessage: (messageId: string) => apiClient.delete(`/chat/messages/${messageId}`),
     reactToMessage: (messageId: string, emoji: string) => apiClient.post(`/chat/messages/${messageId}/react`, { emoji }),
     markAsRead: (conversationId: string, messageIds?: string[]) => apiClient.post('/chat/messages/mark-read', { conversationId, messageIds }),
+    toggleAIChat: (conversationId: string) => apiClient.post(`/chat/conversations/${conversationId}/toggle-ai`),
 
     // Group Features
     createGroup: (data: { name: string; description?: string; avatar?: string; initialMembers?: string[] }) =>
@@ -531,6 +532,8 @@ export const aiAPI = {
 
     generateCBT: (data: { materialId?: string; textContent?: string; numQuestions?: number }) =>
         apiClient.post('/ai/generate-cbt', data),
+    updateSettings: (data: { enabled: boolean; aiName: string; customContext: string }) =>
+        apiClient.put('/ai/settings', data),
 };
 
 // ============ ADMIN ENDPOINTS ============

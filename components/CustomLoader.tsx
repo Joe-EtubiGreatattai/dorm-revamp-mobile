@@ -1,3 +1,4 @@
+import { Text } from '@/components/Themed';
 import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -20,10 +21,15 @@ export default function CustomLoader({ message }: { message?: string }) {
 
             <View style={styles.content}>
                 <Image
-                    source={require('@/assets/images/icon.png')}
+                    source={require('@/assets/images/DORM APP ICON.gif')}
                     style={styles.logo}
                     contentFit="cover"
                 />
+                {message && (
+                    <Text style={[styles.message, { color: isDark ? '#fff' : '#000' }]}>
+                        {message}
+                    </Text>
+                )}
             </View>
         </View>
     );
@@ -55,5 +61,11 @@ const styles = StyleSheet.create({
         width: 120,
         height: 120,
         borderRadius: 60, // Circular
+    },
+    message: {
+        marginTop: 16,
+        fontSize: 16,
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+        textAlign: 'center',
     }
 });

@@ -55,7 +55,7 @@ export default function NotificationDetailScreen() {
         return (
             <View style={[styles.center, { backgroundColor: colors.background }]}>
                 <Text style={{ color: colors.subtext }}>Notification not found</Text>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.backButton}>
                     <Text style={{ color: colors.primary }}>Go Back</Text>
                 </TouchableOpacity>
             </View>
@@ -68,7 +68,7 @@ export default function NotificationDetailScreen() {
                 options={{
                     headerTitle: 'Notification',
                     headerLeft: () => (
-                        <TouchableOpacity onPress={() => router.back()}>
+                        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}>
                             <Ionicons name="arrow-back" size={24} color={colors.text} />
                         </TouchableOpacity>
                     ),

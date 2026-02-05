@@ -50,7 +50,8 @@ interface PostProps {
     images: string[];
     video?: string;
     locations?: string[];
-    timestamp: string;
+    timestamp?: string;
+    createdAt?: string;
     likes: string[] | number; // Support both for robustness
     shares: number;
     liked?: boolean;
@@ -240,6 +241,26 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
         return parts[0] ? parts[0][0].toUpperCase() : 'U';
     };
 
+    const getRelativeTime = (time: string | Date) => {
+        if (!time) return '';
+        try {
+            const date = new Date(time);
+            if (isNaN(date.getTime())) return '';
+
+            const now = new Date();
+            const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+            if (diffInSeconds < 60) return 'Just now';
+            if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+            if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+            if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        } catch (error) {
+            return '';
+        }
+    };
+
     const handleProfilePress = useThrottledCallback((e: any) => {
         e.stopPropagation();
         if (post.user?._id && post.user._id !== 'anonymous') {
@@ -300,7 +321,9 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
                             </View>
                         )}
                     </View>
-                    <Text style={[styles.timestamp, { color: colors.subtext }]}>{post.timestamp}</Text>
+                    <Text style={[styles.timestamp, { color: colors.subtext }]}>
+                        {getRelativeTime((post as any).createdAt || post.timestamp)}
+                    </Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={(e) => { e.stopPropagation(); setMenuVisible(true); }}>
                     <Ionicons name="ellipsis-horizontal" size={20} color={colors.subtext} />

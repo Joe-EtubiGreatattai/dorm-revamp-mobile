@@ -1,7 +1,7 @@
 import { Text } from '@/components/Themed';
 import Colors from '@/constants/Colors';
-import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import { Animated, Dimensions, Easing, StyleSheet, View } from 'react-native';
@@ -125,7 +125,11 @@ export default function AILoader({ visible }: { visible: boolean }) {
                             transform: [{ scale: scaleAnim }]
                         }
                     ]}>
-                        <Ionicons name="sparkles" size={40} color={colors.primary} />
+                        <Image
+                            source={require('@/assets/images/DORM APP ICON.gif')}
+                            style={{ width: 60, height: 60, borderRadius: 30 }}
+                            contentFit="cover"
+                        />
                     </Animated.View>
 
                     {/* Orbiting dots for extra flair */}

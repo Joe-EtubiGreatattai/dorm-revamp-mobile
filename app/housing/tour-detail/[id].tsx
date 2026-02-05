@@ -58,7 +58,7 @@ export default function TourDetailScreen() {
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
                 <Stack.Screen options={{ headerShown: false }} />
                 <Text style={{ color: colors.text }}>Tour request not found</Text>
-                <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20 }}>
+                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={{ marginTop: 20 }}>
                     <Text style={{ color: colors.primary }}>Go Back</Text>
                 </TouchableOpacity>
             </SafeAreaView>
@@ -157,7 +157,7 @@ export default function TourDetailScreen() {
             {/* Custom Header */}
             <View style={[styles.header, { borderBottomColor: colors.border }]}>
                 <TouchableOpacity
-                    onPress={() => router.back()}
+                    onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
                     style={[styles.backBtn, { backgroundColor: colors.card }]}
                 >
                     <Ionicons name="chevron-back" size={24} color={colors.text} />

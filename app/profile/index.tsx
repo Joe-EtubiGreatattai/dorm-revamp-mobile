@@ -277,6 +277,7 @@ export default function MyProfileScreen() {
                             <Text style={[styles.sectionTitleSmall, { color: colors.subtext }]}>App Settings</Text>
                             <View style={[styles.section, { backgroundColor: colors.card }]}>
                                 {renderSettingItem('notifications-outline', 'Notifications', '/settings/notifications', '#8b5cf6')}
+                                {renderSettingItem('sparkles-outline', 'AI Auto-Responder', '/settings/ai_settings', colors.primary)}
                                 {renderSettingItem('color-palette-outline', 'Appearance', '/settings/preferences', '#f59e0b')}
                                 {renderSettingItem('lock-closed-outline', 'Privacy', '/settings/privacy', '#10b981')}
                             </View>

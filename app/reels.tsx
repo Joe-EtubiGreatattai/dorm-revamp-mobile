@@ -382,7 +382,7 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
                     </View>
 
                     <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
                         style={{ flex: 1 }}
                         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
                     >
@@ -618,7 +618,7 @@ export default function ReelsScreen() {
 
             <TouchableOpacity
                 style={[styles.backButton, { top: insets.top + 10 }]}
-                onPress={() => router.back()}
+                onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
             >
                 <Ionicons name="arrow-back" size={28} color="#fff" />
             </TouchableOpacity>

@@ -151,7 +151,17 @@ export default function LibraryScreen() {
 
     // Client-side sorting on the displayed data
     const filteredMaterials = useMemo(() => {
-        return (Array.isArray(displayMaterials) ? [...displayMaterials] : []).sort((a, b) => {
+        const rawMaterials = Array.isArray(displayMaterials) ? displayMaterials : [];
+        const uniqueMaterials = new Map();
+        rawMaterials.forEach(item => {
+            if (item) {
+                const id = item.id || item._id;
+                if (id) uniqueMaterials.set(id, item);
+            }
+        });
+        const deduped = Array.from(uniqueMaterials.values());
+
+        return [...deduped].sort((a, b) => {
             if (activeFilters.sortBy === 'Popularity') return (b.downloads || 0) - (a.downloads || 0);
             if (activeFilters.sortBy === 'Rating') return (b.rating || 0) - (a.rating || 0);
             return 0; // Relevance/Date default

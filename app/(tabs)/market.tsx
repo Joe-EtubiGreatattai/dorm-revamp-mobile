@@ -86,7 +86,17 @@ export default function MarketScreen() {
         },
     });
 
-    const items = data?.pages.flatMap(page => page.items) || [];
+    const items = React.useMemo(() => {
+        const rawItems = data?.pages.flatMap(page => page.items) || [];
+        const uniqueItems = new Map();
+        rawItems.forEach(item => {
+            if (item) {
+                const id = item._id || item.id;
+                if (id) uniqueItems.set(id, item);
+            }
+        });
+        return Array.from(uniqueItems.values());
+    }, [data?.pages]);
     console.log(`🛒 [Frontend] Total items in market state: ${items.length}`);
     if (items.length > 0) {
         console.log('🛒 [Frontend] First item preview:', JSON.stringify(items[0], null, 2));

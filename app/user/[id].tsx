@@ -32,6 +32,20 @@ export default function UserProfileScreen() {
     const [isBlocked, setIsBlocked] = useState(false);
     const [blockLoading, setBlockLoading] = useState(false);
 
+    const handleMessage = useThrottledCallback(async () => {
+        if (chatLoading) return;
+        setChatLoading(true);
+        try {
+            // Create or get existing conversation
+            const { data } = await chatAPI.createConversation(id as string);
+            router.push(`/chat/${data._id}`);
+        } catch (error) {
+            console.log('Error creating conversation:', error);
+        } finally {
+            setChatLoading(false);
+        }
+    }, 1000);
+
     React.useEffect(() => {
         if (currentUser && currentUser.blockedUsers) {
             setIsBlocked(currentUser.blockedUsers.includes(id as string));
@@ -82,7 +96,7 @@ export default function UserProfileScreen() {
         );
     }
 
-    const handleBack = () => router.back();
+    const handleBack = () => router.canGoBack() ? router.back() : router.replace('/(tabs)');
 
     const handleFollow = async () => {
         if (followLoading) return;
@@ -110,19 +124,6 @@ export default function UserProfileScreen() {
         }
     };
 
-    const handleMessage = useThrottledCallback(async () => {
-        if (chatLoading) return;
-        setChatLoading(true);
-        try {
-            // Create or get existing conversation
-            const { data } = await chatAPI.createConversation(id as string);
-            router.push(`/chat/${data._id}`);
-        } catch (error) {
-            console.log('Error creating conversation:', error);
-        } finally {
-            setChatLoading(false);
-        }
-    }, 1000);
 
     const handleBlock = async () => {
         showAlert({

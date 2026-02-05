@@ -192,7 +192,16 @@ export default function FeedScreen() {
   };
 
 
-  const filteredPosts = posts;
+  // Deduplicate posts using a Map (by _id)
+  const filteredPosts = React.useMemo(() => {
+    const uniquePosts = new Map();
+    posts.forEach(post => {
+      if (post && post._id) {
+        uniquePosts.set(post._id, post);
+      }
+    });
+    return Array.from(uniquePosts.values());
+  }, [posts]);
 
 
 
@@ -229,7 +238,7 @@ export default function FeedScreen() {
       </View>
 
       {/* Tabs */}
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
           onPress={() => setActiveTab('All')}
           style={[styles.tab, activeTab === 'All' && { borderBottomColor: colors.primary }]}
@@ -345,8 +354,7 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
-    borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    borderBottomWidth: 1,
   },
   tab: {
     flex: 1,

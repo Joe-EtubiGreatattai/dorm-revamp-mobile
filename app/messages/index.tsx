@@ -1,5 +1,6 @@
 import ActionSuccessModal from '@/components/ActionSuccessModal';
 import CustomLoader from '@/components/CustomLoader';
+import EmptyState from '@/components/EmptyState';
 import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -250,6 +251,9 @@ export default function MessagesScreen() {
                             >
                                 {userName}
                             </Text>
+                            {(item.aiEnabledFor?.some((uid: any) => (uid._id || uid).toString() === (isGroup ? 'NONE' : item.user?._id?.toString()))) && (
+                                <Ionicons name="sparkles" size={12} color={colors.primary} style={{ marginLeft: 4 }} />
+                            )}
                             {isGroup ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 4 }}>
                                     <View style={{ backgroundColor: colors.primary + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 4 }}>
@@ -367,6 +371,16 @@ export default function MessagesScreen() {
                             </TouchableOpacity>
                         )}
                     </View>
+                )}
+                ListEmptyComponent={() => !isLoading && (
+                    <EmptyState
+                        title="No Conversations Yet"
+                        description="Start chatting with friends and classmates to see your messages here."
+                        icon="chatbubble-ellipses-outline"
+                        actionLabel="Start a Chat"
+                        onAction={handleCreateMessage}
+                        style={{ marginTop: 40 }}
+                    />
                 )}
             />
 

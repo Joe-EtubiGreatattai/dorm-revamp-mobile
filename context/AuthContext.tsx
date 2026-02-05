@@ -49,6 +49,11 @@ type User = {
     role: 'user' | 'admin' | 'ambassador';
     isBanned?: boolean;
     banReason?: string;
+    aiSettings?: {
+        enabled: boolean;
+        aiName: string;
+        customContext: string;
+    };
 };
 
 type AuthContextType = {
