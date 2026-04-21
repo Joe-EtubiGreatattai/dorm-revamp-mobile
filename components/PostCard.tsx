@@ -14,11 +14,24 @@ import { useAlert } from '@/context/AlertContext';
 import { useRouter } from 'expo-router';
 import { Share } from 'react-native';
 
+import { useIsMounted } from '@/hooks/useIsMounted';
 import { useThrottledCallback } from '@/hooks/useThrottledCallback';
-import { postAPI } from '@/utils/apiClient';
+import { API_URL, postAPI } from '@/utils/apiClient';
 import CreatePostModal from './CreatePostModal';
+import ImageViewerModal from './ImageViewerModal';
 
 const { width } = Dimensions.get('window');
+
+// Helper to normalize image URLs
+const getMediaUri = (path?: string) => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    const normalizedPath = path.replace(/\\/g, '/');
+    // Ensure we don't double slash if API_URL ends with / or path starts with /
+    const baseUrl = API_URL.replace(/\/api\/?$/, '');
+    const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath;
+    return `${baseUrl}/${cleanPath}`;
+};
 
 interface ReplyProps {
     id: string;
@@ -79,13 +92,21 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
     const [isMenuVisible, setMenuVisible] = React.useState(false);
     const [isVisible, setIsVisible] = React.useState(true);
     const [isEditModalVisible, setEditModalVisible] = useState(false);
+    const [isViewerVisible, setViewerVisible] = useState(false);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+    const isMounted = useIsMounted();
+
+    const processedImages = React.useMemo(() => {
+        return post.images?.map(img => getMediaUri(img) || '') || [];
+    }, [post.images]);
 
     // Increment view count on mount
     React.useEffect(() => {
         const incrementViewCount = async () => {
             try {
                 const response = await postAPI.incrementView(post._id);
-                if (response.data?.views !== undefined) {
+                if (isMounted.current && response.data?.views !== undefined) {
                     setViews(response.data.views);
                 }
             } catch (error) {
@@ -93,7 +114,7 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
             }
         };
         incrementViewCount();
-    }, [post._id]);
+    }, [post._id, isMounted]);
 
     // Sync state with props for real-time updates from parent
     React.useEffect(() => {
@@ -232,6 +253,11 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
         setEditModalVisible(true);
     };
 
+    const openImageViewer = (index: number) => {
+        setCurrentImageIndex(index);
+        setViewerVisible(true);
+    };
+
     const getInitials = (name: string) => {
         if (!name) return 'U';
         const parts = name.split(' ').filter(p => p.length > 0);
@@ -285,7 +311,7 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
                 <TouchableOpacity onPress={handleProfilePress} activeOpacity={0.7}>
                     {post.user?.avatar ? (
                         <Image
-                            source={{ uri: post.user.avatar }}
+                            source={{ uri: getMediaUri(post.user.avatar) || '' }}
                             style={styles.avatar}
                         />
                     ) : (
@@ -392,7 +418,7 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
             {post.video && typeof post.video === 'string' && post.video.length > 0 && (
                 <View style={styles.videoContainer}>
                     <VideoPlayer
-                        uri={post.video}
+                        uri={getMediaUri(post.video) || ''}
                         postId={post._id}
                         style={styles.postVideo}
                         resizeMode={ResizeMode.CONTAIN}
@@ -403,21 +429,38 @@ export default function PostCard({ post, isViewable }: { post: PostProps, isView
             )}
 
             {/* Images */}
-            {post.images.length > 0 && (
+            {processedImages.length > 0 && (
                 <View style={styles.imageGrid}>
-                    {post.images.map((img, index) => (
-                        <Image
+                    {processedImages.filter(img => img && img.trim().length > 0).map((img, index) => (
+                        <TouchableOpacity
                             key={index}
-                            source={{ uri: img }}
-                            style={[
-                                styles.postImage,
-                                post.images.length === 1 ? styles.singleImage : styles.multiImage
-                            ]}
-                            contentFit="cover"
-                        />
+                            activeOpacity={0.9}
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                openImageViewer(index);
+                            }}
+                        >
+                            <Image
+                                source={{ uri: img }}
+                                style={[
+                                    styles.postImage,
+                                    processedImages.length === 1 ? styles.singleImage : styles.multiImage
+                                ]}
+                                contentFit="cover"
+                                transition={200}
+                                cachePolicy="memory-disk"
+                            />
+                        </TouchableOpacity>
                     ))}
                 </View>
             )}
+
+            <ImageViewerModal
+                visible={isViewerVisible}
+                images={processedImages}
+                initialIndex={currentImageIndex}
+                onClose={() => setViewerVisible(false)}
+            />
 
             {/* Actions */}
             <View style={styles.footer}>

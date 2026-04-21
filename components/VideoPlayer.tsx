@@ -1,4 +1,5 @@
 import Colors from '@/constants/Colors';
+import { useIsMounted } from '@/hooks/useIsMounted';
 import { useThrottledCallback } from '@/hooks/useThrottledCallback';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
@@ -16,6 +17,9 @@ interface VideoPlayerProps {
     isLooping?: boolean;
     autoPlay?: boolean;
     useNativeControls?: boolean; // We override this but keep for compatibility
+    playbackRange?: { start: number; end: number };
+    onPositionUpdate?: (position: number) => void;
+    seekPosition?: number; // in seconds
 }
 
 export default function VideoPlayer({
@@ -24,7 +28,10 @@ export default function VideoPlayer({
     style,
     resizeMode = ResizeMode.CONTAIN,
     isLooping = true,
-    autoPlay = false
+    autoPlay = false,
+    playbackRange,
+    onPositionUpdate,
+    seekPosition
 }: VideoPlayerProps) {
     const router = useRouter();
     const videoRef = useRef<Video>(null);
@@ -36,6 +43,7 @@ export default function VideoPlayer({
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
     const lastTap = useRef<number>(0);
+    const isMounted = useIsMounted();
 
     const togglePlay = async () => {
         if (!videoRef.current) return;
@@ -105,6 +113,37 @@ export default function VideoPlayer({
         }
     }, [autoPlay, isFocused]);
 
+    // Handle seeking to start when range changes
+    useEffect(() => {
+        if (playbackRange && videoRef.current) {
+            videoRef.current.setStatusAsync({
+                positionMillis: playbackRange.start * 1000,
+                shouldPlay: autoPlay
+            });
+        }
+    }, [playbackRange?.start]);
+
+    // Handle manual seeking from prop
+    useEffect(() => {
+        if (seekPosition !== undefined && videoRef.current) {
+            videoRef.current.setPositionAsync(seekPosition * 1000);
+        }
+    }, [seekPosition]);
+
+    const handlePlaybackStatusUpdate = (s: any) => {
+        if (!isMounted.current) return;
+        setStatus(s);
+        if (s.positionMillis !== undefined) {
+            onPositionUpdate?.(s.positionMillis / 1000);
+        }
+        if (playbackRange && s.isPlaying) {
+            const currentSec = s.positionMillis / 1000;
+            if (currentSec >= playbackRange.end) {
+                videoRef.current?.setPositionAsync(playbackRange.start * 1000);
+            }
+        }
+    };
+
     useEffect(() => {
         let timeout: ReturnType<typeof setTimeout>;
         if (showControls && status.isPlaying) {
@@ -125,12 +164,12 @@ export default function VideoPlayer({
                     source={{ uri }}
                     style={StyleSheet.absoluteFill}
                     resizeMode={resizeMode}
-                    isLooping={isLooping}
+                    isLooping={playbackRange ? false : isLooping}
                     shouldPlay={autoPlay}
                     isMuted={muted}
                     onLoadStart={() => setIsLoading(true)}
                     onLoad={() => setIsLoading(false)}
-                    onPlaybackStatusUpdate={(s) => setStatus(s)}
+                    onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
                 />
             </TouchableOpacity>
 

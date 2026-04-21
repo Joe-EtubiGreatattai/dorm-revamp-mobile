@@ -20,6 +20,7 @@ const queryClient = new QueryClient();
 
 import CustomLoader from '@/components/CustomLoader';
 import RestrictedTabModal from '@/components/RestrictedTabModal';
+import UploadStatusIndicator from '@/components/UploadStatusIndicator';
 import { useColorScheme } from '@/components/useColorScheme';
 import { AlertProvider } from '@/context/AlertContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
@@ -27,6 +28,8 @@ import { CallProvider } from '@/context/CallContext';
 import { HapticsProvider } from '@/context/HapticsContext';
 import { RestrictionProvider } from '@/context/RestrictionContext';
 import { ThemeProvider as AppThemeProvider } from '@/context/ThemeContext';
+import { UploadProvider } from '@/context/UploadContext';
+// import { initialize, LogLevel } from 'react-native-clarity';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -66,16 +69,17 @@ export default function RootLayout() {
     <AppThemeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <RestrictionProvider>
-            <CallProvider>
-              <HapticsProvider>
-                <AlertProvider>
-                  <RootLayoutNav fontsLoaded={loaded} />
-                  <RestrictedTabModal />
-                </AlertProvider>
-              </HapticsProvider>
-            </CallProvider>
-          </RestrictionProvider>
+          <UploadProvider>
+            <RestrictionProvider>
+              <CallProvider>
+                <HapticsProvider>
+                  <AlertProvider>
+                    <RootLayoutNav fontsLoaded={loaded} />
+                  </AlertProvider>
+                </HapticsProvider>
+              </CallProvider>
+            </RestrictionProvider>
+          </UploadProvider>
         </AuthProvider>
       </QueryClientProvider>
     </AppThemeProvider>
@@ -89,6 +93,15 @@ function RootLayoutNav({ fontsLoaded }: { fontsLoaded: boolean }) {
   const router = useRouter();
 
   useEffect(() => {
+    // Initialize Microsoft Clarity
+    /*
+    try {
+      initialize('vbzsnx8y6h', { logLevel: LogLevel.None });
+    } catch (e) {
+      console.warn('Clarity initialization failed. This is expected in Expo Go or if a native build is missing.', e);
+    }
+    */
+
     if (fontsLoaded && !isLoading) {
       // Small delay to ensure the initial screen has rendered
       const timer = setTimeout(() => {
@@ -136,6 +149,8 @@ function RootLayoutNav({ fontsLoaded }: { fontsLoaded: boolean }) {
           <Stack.Screen name="manage-listings" />
           <Stack.Screen name="settings/support_chat" />
         </Stack>
+        <RestrictedTabModal />
+        <UploadStatusIndicator />
       </ThemeProvider>
     </GestureHandlerRootView>
   );

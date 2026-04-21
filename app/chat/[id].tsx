@@ -1,3 +1,4 @@
+import AudioPlayer from '@/components/AudioPlayer';
 import CustomLoader from '@/components/CustomLoader';
 import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -64,6 +65,12 @@ export default function ChatScreen() {
     const flatListRef = useRef<FlatList>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [otherUser, setOtherUser] = useState<any>(null);
+    const otherUserRef = useRef(otherUser);
+
+    React.useEffect(() => {
+        otherUserRef.current = otherUser;
+    }, [otherUser]);
+
     const [isLoading, setIsLoading] = useState(true);
     const [inputText, setInputText] = useState('');
     const [isOnline, setIsOnline] = useState(false);
@@ -134,12 +141,14 @@ export default function ChatScreen() {
                 setIsOnline(other.isOnline || false);
 
                 // Map messages to ensure compatibility
-                const formattedMessages = msgRes.data.map((m: any) => ({
-                    ...m,
-                    id: m._id,
-                    text: m.content, // Fallback for UI if it uses text
-                    timestamp: new Date(m.createdAt || m.timestamp)
-                }));
+                const formattedMessages = msgRes.data
+                    .filter((m: any) => !m.isDeleted) // Allow user to see nothing at all for deleted messages
+                    .map((m: any) => ({
+                        ...m,
+                        id: m._id,
+                        text: m.content, // Fallback for UI if it uses text
+                        timestamp: new Date(m.createdAt || m.timestamp)
+                    }));
                 setMessages(formattedMessages);
 
                 setIsMyAIEnabled(conversation.aiEnabledFor?.some((uid: any) => (uid._id || uid).toString() === currentUser?._id) || false);
@@ -218,13 +227,15 @@ export default function ChatScreen() {
         });
 
         const handleOnline = ({ userId }: { userId: string }) => {
-            if (userId === otherUser?._id || userId === otherUser?.id) {
+            const currentOtherUser = otherUserRef.current;
+            if (userId === currentOtherUser?._id || userId === currentOtherUser?.id) {
                 setIsOnline(true);
             }
         };
 
         const handleOffline = ({ userId }: { userId: string }) => {
-            if (userId === otherUser?._id || userId === otherUser?.id) {
+            const currentOtherUser = otherUserRef.current;
+            if (userId === currentOtherUser?._id || userId === currentOtherUser?.id) {
                 setIsOnline(false);
             }
         };
@@ -236,9 +247,8 @@ export default function ChatScreen() {
                 setMessages(prev => {
                     // Check if optimistic message exists
                     const optimisticIndex = prev.findIndex(m =>
-                        m.id?.startsWith('temp-') &&
-                        m.content === message.content &&
-                        m.senderId === message.senderId
+                        (m.id?.startsWith('temp-') && m.mediaUrl === message.mediaUrl && message.type !== 'text') || // Match by media URL for non-text
+                        (m.id?.startsWith('temp-') && m.content === message.content && m.senderId === message.senderId) // Fallback for text
                     );
 
                     if (optimisticIndex !== -1) {
@@ -260,7 +270,7 @@ export default function ChatScreen() {
         };
 
         const handleTypingIndicator = ({ userId, isTyping }: any) => {
-            if (userId === otherUser?._id) {
+            if (userId === otherUserRef.current?._id) {
                 setIsTyping(isTyping);
             }
         };
@@ -357,7 +367,7 @@ export default function ChatScreen() {
             socket.off('connect', joinRoom);
             socket.off('reconnect', joinRoom);
         };
-    }, [activeConversationId, otherUser]); // Depend on resolved ID
+    }, [activeConversationId]); // Depend on resolved ID
 
     const handleCall = () => {
         if (!otherUser) return;
@@ -513,6 +523,12 @@ export default function ChatScreen() {
 
         try {
             const mediaUrl = await authAPI.uploadImage(uri);
+
+            // Update optimistic message with real URL so duplication detection works
+            setMessages(prev => prev.map(m =>
+                m.id === optimisticId ? { ...m, mediaUrl } : m
+            ));
+
             const targetId = activeConversationId || id as string;
 
             await chatAPI.sendMessage(targetId, {
@@ -551,7 +567,7 @@ export default function ChatScreen() {
     };
 
     const sendMessage = async () => {
-        if (!inputText.trim()) return;
+        if (!inputText.trim() && !contextMarketItem) return;
 
         const optimisticId = `temp-${Date.now()}`;
         const content = inputText.trim();
@@ -818,9 +834,9 @@ export default function ChatScreen() {
                             />
                         )}
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={handleCallThrottled} style={styles.actionButton}>
+                    {/* <TouchableOpacity onPress={handleCallThrottled} style={styles.actionButton}>
                         <Ionicons name="call-outline" size={24} color={colors.text} />
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                 </View>
             </View>
 
@@ -912,10 +928,10 @@ export default function ChatScreen() {
                             multiline
                         />
 
-                        {inputText.trim() || isUploading ? (
+                        {inputText.trim() || isUploading || contextMarketItem ? (
                             <TouchableOpacity
                                 onPress={sendMessage}
-                                disabled={!inputText.trim() || isUploading}
+                                disabled={(!inputText.trim() && !contextMarketItem) || isUploading}
                                 style={[styles.sendButton, { backgroundColor: colors.primary }]}
                             >
                                 {isUploading ? (
@@ -1081,6 +1097,21 @@ const MessageItem = ({ item, isMe, onReply, onReact, onLongPress, onTransferActi
 
                         {item.type === 'image' && item.mediaUrl && (
                             <Image source={{ uri: item.mediaUrl }} style={styles.messageImage} contentFit="cover" />
+                        )}
+
+                        {item.type === 'voice' && item.mediaUrl && (
+                            <View style={styles.voiceMessage}>
+                                <AudioPlayer
+                                    uri={item.mediaUrl}
+                                    accentColor={isMe ? '#fff' : colors.primary}
+                                    iconColor={isMe ? colors.primary : '#fff'}
+                                    containerStyle={{
+                                        backgroundColor: 'transparent',
+                                        borderWidth: 0,
+                                        padding: 0
+                                    }}
+                                />
+                            </View>
                         )}
 
                         {item.type === 'text' && (

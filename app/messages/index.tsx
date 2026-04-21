@@ -4,14 +4,14 @@ import EmptyState from '@/components/EmptyState';
 import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { useThrottledCallback } from '@/hooks/useThrottledCallback';
+import { useAuth } from '@/context/AuthContext';
 import { chatAPI } from '@/utils/apiClient';
 import { getSocket } from '@/utils/socket';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow } from 'date-fns';
 import { Image } from 'expo-image';
-import { Stack, useRouter } from 'expo-router';
-import React from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback } from 'react';
 import { FlatList, RefreshControl, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,6 +20,7 @@ export default function MessagesScreen() {
     const insets = useSafeAreaInsets();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
+    const { user: currentUser } = useAuth();
     const [searchQuery, setSearchQuery] = React.useState('');
     const [isNewMessageModalVisible, setNewMessageModalVisible] = React.useState(false);
     const [conversations, setConversations] = React.useState<any[]>([]);
@@ -35,11 +36,20 @@ export default function MessagesScreen() {
                 chatAPI.getConversations(),
                 chatAPI.getInvitations()
             ]);
-            setConversations(convRes.data);
+
+            // Filter out conversations with deleted users (Unknown User)
+            const validConversations = convRes.data.filter((c: any) => {
+                const isGroup = c.type === 'group';
+                const userName = isGroup ? c.groupMetadata?.name : c.user?.name;
+                // Remove conversations where the user is "Unknown User" or doesn't exist
+                return userName && userName !== 'Unknown User';
+            });
+
+            setConversations(validConversations);
 
             // Initialize online users from fetched data
             const initialOnlineUsers = new Set<string>();
-            convRes.data.forEach((c: any) => {
+            validConversations.forEach((c: any) => {
                 // Check direct user (1-on-1)
                 if (c.user?.isOnline) {
                     initialOnlineUsers.add(c.user._id || c.user.id);
@@ -63,9 +73,11 @@ export default function MessagesScreen() {
         }
     };
 
-    React.useEffect(() => {
-        fetchConversations();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            fetchConversations();
+        }, [])
+    );
 
     // Socket listener for real-time conversation updates
     React.useEffect(() => {
@@ -76,19 +88,31 @@ export default function MessagesScreen() {
             console.log('💬 [Messages] Received new message:', message);
             // Update the conversation list
             setConversations((prev) => {
-                const convIndex = prev.findIndex(c => c.id === message.conversationId);
+                const convIndex = prev.findIndex(c => c.id === message.conversationId || c._id === message.conversationId);
                 if (convIndex !== -1) {
                     // Update existing conversation
                     const updated = [...prev];
+                    
+                    const isMyMessage = message.senderId === currentUser?._id;
+                    const messageContent = message.type === 'text' ? message.content : 
+                        message.type === 'image' ? '📷 Image' :
+                        message.type === 'video' ? '🎥 Video' :
+                        message.type === 'voice' ? '🎤 Voice message' :
+                        message.type === 'file' ? '📄 File' : 'New message';
+
                     updated[convIndex] = {
                         ...updated[convIndex],
-                        lastMessage: message.content,
+                        lastMessage: messageContent,
                         lastMessageAt: message.createdAt,
-                        timestamp: message.createdAt
+                        timestamp: message.createdAt,
+                        unreadCount: isMyMessage ? 0 : (updated[convIndex].unreadCount || 0) + 1
                     };
                     // Move to top
                     const [conv] = updated.splice(convIndex, 1);
                     return [conv, ...updated];
+                } else {
+                    // New conversation, fetch list
+                    fetchConversations();
                 }
                 return prev;
             });
@@ -151,12 +175,25 @@ export default function MessagesScreen() {
             });
         };
 
+        const handleReadUpdate = ({ conversationId, readerId }: any) => {
+            if (readerId === currentUser?._id) {
+                setConversations(prev => prev.map(c => {
+                    if (c.id === conversationId || c._id === conversationId) {
+                        return { ...c, unreadCount: 0 };
+                    }
+                    return c;
+                }));
+            }
+        };
+
         socket.on('message:new', handleNewMessage);
         socket.on('notification:message', handleMessageNotification);
         socket.on('typing:indicator', handleTypingIndicator);
         socket.on('conversation:updated', handleConversationUpdated);
         socket.on('user:online', handleUserOnline);
         socket.on('user:offline', handleUserOffline);
+        socket.on('message:read_update', handleReadUpdate);
+        socket.on('message:read_all', handleReadUpdate);
 
         // request initial online status if backend supports it, or just rely on events
         socket.emit('get:online_users');
@@ -168,8 +205,10 @@ export default function MessagesScreen() {
             socket.off('conversation:updated', handleConversationUpdated);
             socket.off('user:online', handleUserOnline);
             socket.off('user:offline', handleUserOffline);
+            socket.off('message:read_update', handleReadUpdate);
+            socket.off('message:read_all', handleReadUpdate);
         };
-    }, []);
+    }, [currentUser]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -210,9 +249,9 @@ export default function MessagesScreen() {
         return parts[0] ? parts[0][0].toUpperCase() : 'U';
     };
 
-    const handleConversationPress = useThrottledCallback((id: string) => {
+    const handleConversationPress = (id: string) => {
         router.push(`/chat/${id}`);
-    }, 1000);
+    };
 
     const renderItem = ({ item }: { item: any }) => {
         const isTyping = typingUsers[item.id];

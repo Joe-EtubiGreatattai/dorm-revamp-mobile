@@ -6,13 +6,23 @@ import Colors from '@/constants/Colors';
 import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
 import { useThrottledCallback } from '@/hooks/useThrottledCallback';
-import { authAPI, chatAPI, postAPI } from '@/utils/apiClient';
+import { API_URL, authAPI, chatAPI, postAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// Helper to normalize image URLs
+const getMediaUri = (path?: string) => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    const normalizedPath = path.replace(/\\/g, '/');
+    const baseUrl = API_URL.replace(/\/api\/?$/, '');
+    const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath;
+    return `${baseUrl}/${cleanPath}`;
+};
 
 export default function UserProfileScreen() {
     const { id } = useLocalSearchParams();
@@ -194,7 +204,7 @@ export default function UserProfileScreen() {
                 {/* Profile Info Section */}
                 <View style={styles.profileHeader}>
                     {user.avatar ? (
-                        <Image source={{ uri: user.avatar }} style={styles.avatar} />
+                        <Image source={{ uri: getMediaUri(user.avatar) || '' }} style={styles.avatar} />
                     ) : (
                         <View style={[styles.avatar, styles.initialsContainer, { backgroundColor: colors.primary + '15' }]}>
                             <Text style={[styles.initialsText, { color: colors.primary, fontSize: 32 }]}>

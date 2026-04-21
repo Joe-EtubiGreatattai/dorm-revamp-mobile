@@ -2,7 +2,7 @@ import ActionSuccessModal from '@/components/ActionSuccessModal';
 import CustomLoader from '@/components/CustomLoader';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { marketAPI } from '@/utils/apiClient';
+import { API_URL, marketAPI } from '@/utils/apiClient';
 import { getSocket } from '@/utils/socket';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -30,6 +30,16 @@ const PaystackWebView = PaystackLib?.Paystack || PaystackLib?.default || Paystac
 
 const { width } = Dimensions.get('window');
 
+// Helper to normalize image URLs
+const getMediaUri = (path?: string) => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    const normalizedPath = path.replace(/\\/g, '/');
+    const baseUrl = API_URL.replace(/\/api\/?$/, '');
+    const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath;
+    return `${baseUrl}/${cleanPath}`;
+};
+
 export default function MarketItemDetail() {
     const { id } = useLocalSearchParams();
     const router = useRouter();
@@ -54,7 +64,7 @@ export default function MarketItemDetail() {
     const seller = {
         id: sellerData?._id || 'unknown',
         name: sellerData?.name || 'Unknown User',
-        avatar: sellerData?.avatar || 'https://i.pravatar.cc/150',
+        avatar: getMediaUri(sellerData?.avatar) || 'https://i.pravatar.cc/150',
         university: sellerData?.university || 'Campus',
         stats: item?.vendorStats || { avgRating: 0, reviewCount: 0 }
     };
@@ -195,7 +205,7 @@ export default function MarketItemDetail() {
                         showsHorizontalScrollIndicator={false}
                         onScroll={onScroll}
                         renderItem={({ item: imageUrl }) => (
-                            <Image source={{ uri: imageUrl }} style={styles.sliderImage} />
+                            <Image source={{ uri: getMediaUri(imageUrl) || '' }} style={styles.sliderImage} />
                         )}
                     />
 

@@ -262,9 +262,9 @@ export default function WalletTransactionModal({ visible, onClose, type, onSucce
                         <Text style={[styles.stepSub, { color: colors.subtext }]}>Where should we send your money?</Text>
 
                         {hasSavedAccounts && user.bankAccounts && (
-                            <View style={{ marginBottom: 20 }}>
-                                <Text style={[styles.label, { color: colors.subtext, marginBottom: 12 }]}>Saved Accounts</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                            <View style={{ marginBottom: 24 }}>
+                                <Text style={[styles.label, { color: colors.subtext, marginBottom: 16 }]}>Saved Accounts</Text>
+                                <View style={{ gap: 12 }}>
                                     {user.bankAccounts.map((acc: any) => (
                                         <TouchableOpacity
                                             key={acc._id}
@@ -272,7 +272,8 @@ export default function WalletTransactionModal({ visible, onClose, type, onSucce
                                                 styles.savedAccountCard,
                                                 {
                                                     backgroundColor: colors.card,
-                                                    borderColor: selectedAccountId === acc._id ? colors.primary : colors.border
+                                                    borderColor: selectedAccountId === acc._id ? colors.primary : colors.border,
+                                                    borderWidth: selectedAccountId === acc._id ? 2 : 1,
                                                 }
                                             ]}
                                             onPress={() => {
@@ -280,31 +281,38 @@ export default function WalletTransactionModal({ visible, onClose, type, onSucce
                                                 setBankDetails({ account: acc.accountNumber, name: acc.bankName, accountName: acc.accountName });
                                             }}
                                         >
-                                            <Ionicons
-                                                name="business-outline"
-                                                size={20}
-                                                color={selectedAccountId === acc._id ? colors.primary : colors.subtext}
-                                            />
-                                            <View>
-                                                <Text style={[styles.accName, { color: colors.text }]} numberOfLines={1}>{acc.accountName}</Text>
-                                                <Text style={[styles.accNumber, { color: colors.subtext }]}>{acc.bankName} • {acc.accountNumber.slice(-4)}</Text>
+                                            <View style={[styles.accIconContainer, { backgroundColor: selectedAccountId === acc._id ? colors.primary + '15' : colors.border + '30' }]}>
+                                                <Ionicons
+                                                    name="business"
+                                                    size={22}
+                                                    color={selectedAccountId === acc._id ? colors.primary : colors.subtext}
+                                                />
                                             </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.accName, { color: colors.text }]} numberOfLines={1}>{acc.accountName}</Text>
+                                                <Text style={[styles.accNumber, { color: colors.subtext }]}>{acc.bankName} • {acc.accountNumber}</Text>
+                                            </View>
+                                            {selectedAccountId === acc._id && (
+                                                <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                                            )}
                                         </TouchableOpacity>
                                     ))}
                                     <TouchableOpacity
                                         style={[
-                                            styles.savedAccountCard,
-                                            { borderColor: selectedAccountId === null ? colors.primary : colors.border }
+                                            styles.addAccountBtn,
+                                            { borderColor: colors.border, backgroundColor: colors.card }
                                         ]}
                                         onPress={() => {
                                             setSelectedAccountId(null);
                                             setBankDetails({ account: '', name: '', accountName: '' });
                                         }}
                                     >
-                                        <Ionicons name="add" size={24} color={selectedAccountId === null ? colors.primary : colors.subtext} />
-                                        <Text style={[styles.accName, { color: colors.text }]}>New Account</Text>
+                                        <View style={[styles.addIconCircle, { backgroundColor: colors.primary + '10' }]}>
+                                            <Ionicons name="add" size={24} color={colors.primary} />
+                                        </View>
+                                        <Text style={[styles.addAccountText, { color: colors.primary }]}>Add New Bank Account</Text>
                                     </TouchableOpacity>
-                                </ScrollView>
+                                </View>
                             </View>
                         )}
 
@@ -755,27 +763,63 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     savedAccountCard: {
-        width: 160,
+        width: '100%',
         padding: 16,
-        borderRadius: 16,
-        borderWidth: 2,
+        borderRadius: 20,
+        borderWidth: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    accIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    accName: {
+        fontSize: 16,
+        fontFamily: 'PlusJakartaSans_700Bold',
+        marginBottom: 2,
+    },
+    accNumber: {
+        fontSize: 13,
+        fontFamily: 'PlusJakartaSans_500Medium',
+    },
+    addAccountBtn: {
+        width: '100%',
+        padding: 16,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderStyle: 'dashed',
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
+        marginTop: 4,
     },
-    accName: {
-        fontSize: 14,
+    addIconCircle: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    addAccountText: {
+        fontSize: 15,
         fontFamily: 'PlusJakartaSans_700Bold',
-    },
-    accNumber: {
-        fontSize: 12,
-        fontFamily: 'PlusJakartaSans_500Medium',
     },
     toggleRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginTop: 8,
+        marginTop: 16,
+        paddingHorizontal: 4,
     },
     toggleLabel: {
         fontSize: 15,

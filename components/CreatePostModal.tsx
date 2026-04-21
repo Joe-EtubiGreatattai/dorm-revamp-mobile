@@ -2,6 +2,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
+import { useUpload } from '@/context/UploadContext';
 import { authAPI, postAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode } from 'expo-av';
@@ -22,6 +23,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VideoPlayer from './VideoPlayer';
+import VideoTrimmer from './VideoTrimmer';
 
 export default function CreatePostModal({ visible, onClose, post }: { visible: boolean, onClose: () => void, post?: any }) {
     const colorScheme = useColorScheme();
@@ -37,7 +39,13 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
     const [isAnonymous, setIsAnonymous] = useState(post?.isAnonymous || false);
     const [isVisibilityMenuVisible, setVisibilityMenuVisible] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [trimTimes, setTrimTimes] = useState({ start: 0, end: 0 });
+    const [videoDuration, setVideoDuration] = useState(0);
+    const [currentVideoTime, setCurrentVideoTime] = useState(0);
+    const [seekTime, setSeekTime] = useState<number | undefined>(undefined);
+    const [currentStage, setCurrentStage] = useState<'post' | 'trim'>('post');
     const { showAlert } = useAlert();
+    const { addToQueue } = useUpload();
     const isEditing = !!post;
 
     const maxLength = 280;
@@ -67,8 +75,23 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
         });
 
         if (!result.canceled) {
-            setVideo(result.assets[0].uri);
-            setImages([]); // Clear images if video is selected (often apps limit to one or the other)
+            const asset = result.assets[0];
+            // Check duration (if available from ImagePicker)
+            if (asset.duration && asset.duration > 120000) { // 120,000ms = 2 mins
+                showAlert({
+                    title: 'Video Too Long',
+                    description: 'Please select a video shorter than 2 minutes.',
+                    type: 'error'
+                });
+                return;
+            }
+            setVideo(asset.uri);
+            setImages([]); // Clear images if video is selected
+            // Reset trim times and duration
+            const durationSec = Math.floor((asset.duration || 0) / 1000);
+            setVideoDuration(durationSec);
+            setTrimTimes({ start: 0, end: Math.min(durationSec, 120) });
+            setCurrentStage('trim');
         }
     };
 
@@ -90,329 +113,398 @@ export default function CreatePostModal({ visible, onClose, post }: { visible: b
     const handlePost = async () => {
         if (!content.trim() && images.length === 0 && !video) return;
 
-        setLoading(true);
-        try {
-            // 1. Upload video if local
-            let videoUrl = video;
-            if (video && !video.startsWith('http')) {
-                videoUrl = await authAPI.uploadImage(video);
-            }
+        // 1. Capture any pending location input
+        let finalLocations = [...locations];
+        if (locationInput.trim() && !finalLocations.includes(locationInput.trim())) {
+            finalLocations.push(locationInput.trim());
+        }
 
-            // 2. Upload images if local
-            const uploadedImages = await Promise.all(
-                images.map(async (img) => {
-                    if (img.startsWith('http')) return img;
-                    return await authAPI.uploadImage(img);
-                })
-            );
+        if (isEditing) {
+            setLoading(true);
+            try {
+                // Keep editing direct for now
+                const uploadedImages = await Promise.all(
+                    images.map(async (img) => {
+                        if (img.startsWith('http')) return img;
+                        return await authAPI.uploadImage(img);
+                    })
+                );
+                let videoUrl = video;
+                if (video && !video.startsWith('http')) {
+                    videoUrl = await authAPI.uploadImage(video);
+                }
 
-            const payload = {
-                content,
-                visibility,
-                isAnonymous,
-                locations,
-                images: uploadedImages,
-                video: videoUrl,
-            };
-
-            if (isEditing) {
+                const payload = {
+                    content,
+                    visibility,
+                    isAnonymous,
+                    locations: finalLocations,
+                    images: uploadedImages,
+                    video: videoUrl,
+                };
                 await postAPI.updatePost(post._id, payload);
                 showAlert({
                     title: 'Post Updated',
                     description: 'Your post has been updated successfully.',
                     type: 'success'
                 });
-            } else {
-                await postAPI.createPost(payload);
-                showAlert({
-                    title: 'Post Created',
-                    description: 'Your post is now live on Dorm!',
-                    type: 'success'
-                });
+                onClose();
+            } catch (error: any) {
+                showAlert({ title: 'Update Failed', description: error.message, type: 'error' });
+            } finally {
+                setLoading(false);
             }
+        } else {
+            // Queue for background upload
+            const payload = {
+                content,
+                visibility,
+                isAnonymous,
+                locations: finalLocations,
+                images,
+                video,
+                trim: video ? trimTimes : null
+            };
 
-            if (!isEditing) {
-                setContent('');
-                setImages([]);
-                setVideo(null);
-                setLocations([]);
-                setIsAnonymous(false);
-            }
-            onClose();
-        } catch (error: any) {
-            console.error('❌ [CREATE POST] Failed:', error);
-            const msg = error.response?.data?.message || error.message || 'Failed to create post';
+            await addToQueue(payload);
+
             showAlert({
-                title: 'Post Failed',
-                description: msg,
-                type: 'error'
+                title: 'Upload Started',
+                description: 'Your post is being uploaded in the background.',
+                type: 'info'
             });
-        } finally {
-            setLoading(false);
+
+            setContent('');
+            setImages([]);
+            setVideo(null);
+            setLocations([]);
+            setLocationInput(''); // Clear pending input too
+            setIsAnonymous(false);
+            setCurrentStage('post');
+            onClose();
         }
     };
 
-    return (
-        <Modal visible={visible} animationType="slide" transparent={false}>
-            <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 10) }]}>
-                {/* Twitter-style Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                        <Ionicons name="close" size={28} color={colors.text} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        disabled={(!content.trim() && images.length === 0 && !video) || loading}
-                        style={[
-                            styles.postBtn,
-                            { backgroundColor: colors.primary, opacity: (content.trim() || images.length > 0 || video) && !loading ? 1 : 0.5 }
-                        ]}
-                        onPress={handlePost}
-                    >
-                        {loading ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                            <Text style={styles.postBtnText}>{isEditing ? 'Update' : 'Post'}</Text>
-                        )}
-                    </TouchableOpacity>
+    const renderTrimStage = () => (
+        <View style={[styles.container, { backgroundColor: '#000', paddingTop: Math.max(insets.top, 10) }]}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => setCurrentStage('post')} style={styles.closeBtn}>
+                    <Text style={[styles.headerActionText, { color: '#fff' }]}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Trim Video</Text>
+                <TouchableOpacity
+                    style={[styles.postBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => setCurrentStage('post')}
+                >
+                    <Text style={styles.postBtnText}>Done</Text>
+                </TouchableOpacity>
+            </View>
+
+            <View style={styles.trimStageContent}>
+                <View style={styles.largeVideoContainer}>
+                    {video && (
+                        <VideoPlayer
+                            uri={video}
+                            style={styles.largeVideo}
+                            resizeMode={ResizeMode.CONTAIN}
+                            autoPlay={true}
+                            isLooping={true}
+                            playbackRange={trimTimes}
+                            onPositionUpdate={setCurrentVideoTime}
+                            seekPosition={seekTime}
+                        />
+                    )}
                 </View>
 
-                {/* Visibility Selector Modal */}
-                <Modal
-                    visible={isVisibilityMenuVisible}
-                    transparent={true}
-                    animationType="fade"
-                    onRequestClose={() => setVisibilityMenuVisible(false)}
+                <View style={styles.trimmerBottomSection}>
+                    {video && (
+                        <VideoTrimmer
+                            videoUri={video}
+                            duration={videoDuration}
+                            onTrimChange={setTrimTimes}
+                            onSeek={setSeekTime}
+                            maxDuration={120}
+                            currentTime={currentVideoTime}
+                        />
+                    )}
+                </View>
+            </View>
+        </View>
+    );
+
+    const renderPostStage = () => (
+        <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 10) }]}>
+            {/* Twitter-style Header */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                    <Ionicons name="close" size={28} color={colors.text} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                    disabled={(!content.trim() && images.length === 0 && !video) || loading}
+                    style={[
+                        styles.postBtn,
+                        { backgroundColor: colors.primary, opacity: (content.trim() || images.length > 0 || video) && !loading ? 1 : 0.5 }
+                    ]}
+                    onPress={handlePost}
                 >
+                    {loading ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                        <Text style={styles.postBtnText}>{isEditing ? 'Update' : 'Post'}</Text>
+                    )}
+                </TouchableOpacity>
+            </View>
+
+            {/* Visibility Selector Modal */}
+            <Modal
+                visible={isVisibilityMenuVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setVisibilityMenuVisible(false)}
+            >
+                <TouchableOpacity
+                    style={styles.menuOverlay}
+                    activeOpacity={1}
+                    onPress={() => setVisibilityMenuVisible(false)}
+                />
+                <View style={[styles.menuContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <TouchableOpacity
-                        style={styles.menuOverlay}
-                        activeOpacity={1}
-                        onPress={() => setVisibilityMenuVisible(false)}
-                    />
-                    <View style={[styles.menuContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <TouchableOpacity
-                            style={styles.menuItem}
-                            onPress={() => {
-                                setVisibility('public');
-                                setVisibilityMenuVisible(false);
-                            }}
-                        >
-                            <Ionicons name="earth-outline" size={22} color={colors.text} />
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.menuText, { color: colors.text }]}>Public</Text>
-                                <Text style={[styles.menuSubtext, { color: colors.subtext }]}>Visible to everyone on Dorm</Text>
-                            </View>
-                            {visibility === 'public' && <Ionicons name="checkmark" size={20} color={colors.primary} />}
-                        </TouchableOpacity>
-
-                        <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-
-                        <TouchableOpacity
-                            style={styles.menuItem}
-                            onPress={() => {
-                                setVisibility('school');
-                                setVisibilityMenuVisible(false);
-                            }}
-                        >
-                            <Ionicons name="school-outline" size={22} color={colors.text} />
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.menuText, { color: colors.text }]}>My School Only</Text>
-                                <Text style={[styles.menuSubtext, { color: colors.subtext }]}>Visible only to {user?.university || 'your school'}</Text>
-                            </View>
-                            {visibility === 'school' && <Ionicons name="checkmark" size={20} color={colors.primary} />}
-                        </TouchableOpacity>
-                    </View>
-                </Modal>
-
-                <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    style={{ flex: 1 }}
-                >
-                    <ScrollView
-                        style={styles.content}
-                        keyboardShouldPersistTaps="handled"
+                        style={styles.menuItem}
+                        onPress={() => {
+                            setVisibility('public');
+                            setVisibilityMenuVisible(false);
+                        }}
                     >
-                        <View style={styles.inputWrapper}>
-                            <Image source={{ uri: user?.avatar || 'https://ui-avatars.com/api/?name=User' }} style={styles.avatar} />
-                            <View style={styles.inputContainer}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <TouchableOpacity
-                                        style={[styles.audienceBtn, { borderColor: colors.border }]}
-                                        onPress={() => setVisibilityMenuVisible(true)}
-                                    >
-                                        <Ionicons
-                                            name={visibility === 'public' ? "earth-outline" : "school-outline"}
-                                            size={14}
-                                            color={colors.primary}
-                                        />
-                                        <Text style={[styles.audienceText, { color: colors.primary }]}>
-                                            {visibility === 'public' ? 'Public' : 'My School'}
-                                        </Text>
-                                        <Ionicons name="chevron-down" size={12} color={colors.primary} />
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={[styles.audienceBtn, { borderColor: colors.border, marginLeft: 8 }]}
-                                        onPress={() => setIsAnonymous(!isAnonymous)}
-                                    >
-                                        <Ionicons
-                                            name={isAnonymous ? "eye-off" : "eye"}
-                                            size={14}
-                                            color={isAnonymous ? colors.primary : colors.subtext}
-                                        />
-                                        <Text style={[styles.audienceText, { color: isAnonymous ? colors.primary : colors.subtext }]}>
-                                            {isAnonymous ? 'Anonymous' : 'Public ID'}
-                                        </Text>
-                                    </TouchableOpacity>
-                                </View>
-
-                                <TextInput
-                                    multiline
-                                    placeholder={isEditing ? "Edit your post..." : "What's happening?"}
-                                    placeholderTextColor={colors.subtext}
-                                    style={[styles.input, { color: colors.text }]}
-                                    value={content}
-                                    onChangeText={(text) => text.length <= maxLength && setContent(text)}
-                                    autoFocus
-                                    scrollEnabled={false}
-                                />
-                            </View>
+                        <Ionicons name="earth-outline" size={22} color={colors.text} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.menuText, { color: colors.text }]}>Public</Text>
+                            <Text style={[styles.menuSubtext, { color: colors.subtext }]}>Visible to everyone on Dorm</Text>
                         </View>
+                        {visibility === 'public' && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+                    </TouchableOpacity>
 
-                        {/* Location Tags Preview */}
-                        {locations.length > 0 && (
-                            <View style={styles.locationTagsContainer}>
-                                {locations.map((loc, index) => (
-                                    <View key={index} style={[styles.locationChip, { backgroundColor: colors.primary + '15' }]}>
-                                        <Ionicons name="location" size={12} color={colors.primary} />
-                                        <Text style={[styles.locationChipText, { color: colors.primary }]}>{loc}</Text>
-                                        <TouchableOpacity onPress={() => removeLocation(index)}>
-                                            <Ionicons name="close-circle" size={14} color={colors.primary} />
-                                        </TouchableOpacity>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
+                    <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
 
-                        {/* Location Input */}
-                        {showLocationInput && (
-                            <View style={[styles.locationInputSection, { borderTopColor: colors.border }]}>
-                                <TextInput
-                                    placeholder="Tag a location..."
-                                    placeholderTextColor={colors.subtext}
-                                    style={[styles.locationTextInput, { color: colors.text }]}
-                                    value={locationInput}
-                                    onChangeText={setLocationInput}
-                                    onSubmitEditing={addLocation}
-                                    blurOnSubmit={false}
-                                    autoFocus
-                                />
-                                <TouchableOpacity onPress={addLocation} style={styles.addLocationBtn}>
-                                    <Ionicons name="add-circle" size={24} color={colors.primary} />
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => {
+                            setVisibility('school');
+                            setVisibilityMenuVisible(false);
+                        }}
+                    >
+                        <Ionicons name="school-outline" size={22} color={colors.text} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.menuText, { color: colors.text }]}>My School Only</Text>
+                            <Text style={[styles.menuSubtext, { color: colors.subtext }]}>Visible only to {user?.university || 'your school'}</Text>
+                        </View>
+                        {visibility === 'school' && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+                    </TouchableOpacity>
+                </View>
+            </Modal>
+
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+            >
+                <ScrollView
+                    style={styles.content}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View style={styles.inputWrapper}>
+                        <Image source={{ uri: user?.avatar || 'https://ui-avatars.com/api/?name=User' }} style={styles.avatar} />
+                        <View style={styles.inputContainer}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TouchableOpacity
+                                    style={[styles.audienceBtn, { borderColor: colors.border }]}
+                                    onPress={() => setVisibilityMenuVisible(true)}
+                                >
+                                    <Ionicons
+                                        name={visibility === 'public' ? "earth-outline" : "school-outline"}
+                                        size={14}
+                                        color={colors.primary}
+                                    />
+                                    <Text style={[styles.audienceText, { color: colors.primary }]}>
+                                        {visibility === 'public' ? 'Public' : 'My School'}
+                                    </Text>
+                                    <Ionicons name="chevron-down" size={12} color={colors.primary} />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.audienceBtn, { borderColor: colors.border, marginLeft: 8 }]}
+                                    onPress={() => setIsAnonymous(!isAnonymous)}
+                                >
+                                    <Ionicons
+                                        name={isAnonymous ? "eye-off" : "eye"}
+                                        size={14}
+                                        color={isAnonymous ? colors.primary : colors.subtext}
+                                    />
+                                    <Text style={[styles.audienceText, { color: isAnonymous ? colors.primary : colors.subtext }]}>
+                                        {isAnonymous ? 'Anonymous' : 'Public ID'}
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
-                        )}
 
-                        {/* Image/Video Preview */}
-                        {(images.length > 0 || video) && (
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={styles.imagePreviewContainer}
-                            >
-                                {video && (
-                                    <View style={styles.previewWrapper}>
-                                        <VideoPlayer
-                                            uri={video}
-                                            style={styles.previewImage}
-                                            resizeMode={ResizeMode.COVER}
-                                            autoPlay={true}
-                                            isLooping={true}
-                                        />
-                                        <TouchableOpacity
-                                            style={[styles.removeImageBtn, { backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 10 }]}
-                                            onPress={() => setVideo(null)}
-                                        >
-                                            <Ionicons name="close" size={16} color="#fff" />
-                                        </TouchableOpacity>
-                                    </View>
-                                )}
-                                {images.map((uri, index) => (
-                                    <View key={index} style={styles.previewWrapper}>
-                                        <Image source={{ uri }} style={styles.previewImage} />
-                                        <TouchableOpacity
-                                            style={[styles.removeImageBtn, { backgroundColor: 'rgba(0,0,0,0.6)' }]}
-                                            onPress={() => removeImage(index)}
-                                        >
-                                            <Ionicons name="close" size={16} color="#fff" />
-                                        </TouchableOpacity>
-                                    </View>
-                                ))}
-                                {images.length < 5 && !video && (
-                                    <TouchableOpacity
-                                        style={[styles.addMoreBtn, { borderColor: colors.border }]}
-                                        onPress={pickImages}
-                                    >
-                                        <Ionicons name="add" size={30} color={colors.subtext} />
-                                    </TouchableOpacity>
-                                )}
-                            </ScrollView>
-                        )}
-                    </ScrollView>
-
-                    {/* Rich Media Toolbar (Above Keyboard) */}
-                    <View style={[styles.toolbar, { borderTopColor: colors.border }]}>
-                        <TouchableOpacity style={styles.toolItem} onPress={pickImages} disabled={images.length >= 5}>
-                            <Ionicons
-                                name="image-outline"
-                                size={24}
-                                color={images.length >= 5 ? colors.subtext : colors.primary}
+                            <TextInput
+                                multiline
+                                placeholder={isEditing ? "Edit your post..." : "What's happening?"}
+                                placeholderTextColor={colors.subtext}
+                                style={[styles.input, { color: colors.text }]}
+                                value={content}
+                                onChangeText={(text) => text.length <= maxLength && setContent(text)}
+                                autoFocus
+                                scrollEnabled={false}
                             />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.toolItem}
-                            onPress={pickVideo}
-                            disabled={images.length > 0}
-                        >
-                            <Ionicons
-                                name="videocam-outline"
-                                size={24}
-                                color={images.length > 0 ? colors.subtext : colors.primary}
-                            />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.toolItem}
-                            onPress={() => setShowLocationInput(!showLocationInput)}
-                        >
-                            <Ionicons
-                                name={showLocationInput ? "location" : "location-outline"}
-                                size={24}
-                                color={colors.primary}
-                            />
-                        </TouchableOpacity>
-
-                        <View style={{ flex: 1 }} />
-                        <View style={styles.rightTools}>
-                            {content.length > 0 && (
-                                <>
-                                    <View style={styles.progressContainer}>
-                                        <View style={[styles.progressTrack, { backgroundColor: colors.border }]} />
-                                        <View
-                                            style={[
-                                                styles.progressFill,
-                                                {
-                                                    width: `${progress * 100}%`,
-                                                    backgroundColor: content.length >= maxLength ? colors.error : colors.primary
-                                                }
-                                            ]}
-                                        />
-                                    </View>
-                                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                                </>
-                            )}
                         </View>
                     </View>
-                </KeyboardAvoidingView>
-            </View>
+
+                    {/* Location Tags Preview */}
+                    {locations.length > 0 && (
+                        <View style={styles.locationTagsContainer}>
+                            {locations.map((loc, index) => (
+                                <View key={index} style={[styles.locationChip, { backgroundColor: colors.primary + '15' }]}>
+                                    <Ionicons name="location" size={12} color={colors.primary} />
+                                    <Text style={[styles.locationChipText, { color: colors.primary }]}>{loc}</Text>
+                                    <TouchableOpacity onPress={() => removeLocation(index)}>
+                                        <Ionicons name="close-circle" size={14} color={colors.primary} />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
+                    {/* Location Input */}
+                    {showLocationInput && (
+                        <View style={[styles.locationInputSection, { borderTopColor: colors.border }]}>
+                            <TextInput
+                                placeholder="Tag a location..."
+                                placeholderTextColor={colors.subtext}
+                                style={[styles.locationTextInput, { color: colors.text }]}
+                                value={locationInput}
+                                onChangeText={setLocationInput}
+                                onSubmitEditing={addLocation}
+                                blurOnSubmit={false}
+                                autoFocus
+                            />
+                            <TouchableOpacity onPress={addLocation} style={styles.addLocationBtn}>
+                                <Ionicons name="add-circle" size={24} color={colors.primary} />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {/* Image/Video Preview */}
+                    {(images.length > 0 || video) && (
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.imagePreviewContainer}
+                        >
+                            {video && (
+                                <View style={styles.previewWrapper}>
+                                    <VideoPlayer
+                                        uri={video}
+                                        style={styles.previewImage}
+                                        resizeMode={ResizeMode.COVER}
+                                        autoPlay={true}
+                                        isLooping={true}
+                                    />
+                                    <TouchableOpacity
+                                        style={[styles.removeImageBtn, { backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 10 }]}
+                                        onPress={() => setVideo(null)}
+                                    >
+                                        <Ionicons name="close" size={16} color="#fff" />
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={styles.editVideoOverlay}
+                                        onPress={() => setCurrentStage('trim')}
+                                    >
+                                        <Ionicons name="cut" size={16} color="#fff" />
+                                        <Text style={styles.editVideoText}>Edit</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                            {images.map((uri, index) => (
+                                <View key={index} style={styles.previewWrapper}>
+                                    <Image source={{ uri }} style={styles.previewImage} />
+                                    <TouchableOpacity
+                                        style={[styles.removeImageBtn, { backgroundColor: 'rgba(0,0,0,0.6)' }]}
+                                        onPress={() => removeImage(index)}
+                                    >
+                                        <Ionicons name="close" size={16} color="#fff" />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                            {images.length < 5 && !video && (
+                                <TouchableOpacity
+                                    style={[styles.addMoreBtn, { borderColor: colors.border }]}
+                                    onPress={pickImages}
+                                >
+                                    <Ionicons name="add" size={30} color={colors.subtext} />
+                                </TouchableOpacity>
+                            )}
+                        </ScrollView>
+                    )}
+                </ScrollView>
+
+                {/* Rich Media Toolbar (Above Keyboard) */}
+                <View style={[styles.toolbar, { borderTopColor: colors.border }]}>
+                    <TouchableOpacity style={styles.toolItem} onPress={pickImages} disabled={images.length >= 5}>
+                        <Ionicons
+                            name="image-outline"
+                            size={24}
+                            color={images.length >= 5 ? colors.subtext : colors.primary}
+                        />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.toolItem}
+                        onPress={pickVideo}
+                        disabled={images.length > 0}
+                    >
+                        <Ionicons
+                            name="videocam-outline"
+                            size={24}
+                            color={images.length > 0 ? colors.subtext : colors.primary}
+                        />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.toolItem}
+                        onPress={() => setShowLocationInput(!showLocationInput)}
+                    >
+                        <Ionicons
+                            name={showLocationInput ? "location" : "location-outline"}
+                            size={24}
+                            color={colors.primary}
+                        />
+                    </TouchableOpacity>
+
+                    <View style={{ flex: 1 }} />
+                    <View style={styles.rightTools}>
+                        {content.length > 0 && (
+                            <>
+                                <View style={styles.progressContainer}>
+                                    <View style={[styles.progressTrack, { backgroundColor: colors.border }]} />
+                                    <View
+                                        style={[
+                                            styles.progressFill,
+                                            {
+                                                width: `${progress * 100}%`,
+                                                backgroundColor: content.length >= maxLength ? colors.error : colors.primary
+                                            }
+                                        ]}
+                                    />
+                                </View>
+                                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                            </>
+                        )}
+                    </View>
+                </View>
+            </KeyboardAvoidingView>
+        </View>
+    );
+
+    return (
+        <Modal visible={visible} animationType="slide" transparent={false}>
+            {currentStage === 'trim' ? renderTrimStage() : renderPostStage()}
         </Modal >
     );
 }
@@ -647,6 +739,49 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderRadius: 12,
     },
+    trimStageContent: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    largeVideoContainer: {
+        flex: 1,
+        width: '100%',
+        backgroundColor: '#000',
+    },
+    largeVideo: {
+        width: '100%',
+        height: '100%',
+    },
+    trimmerBottomSection: {
+        padding: 20,
+        backgroundColor: 'rgba(0,0,0,0.9)',
+    },
+    headerTitle: {
+        fontSize: 17,
+        fontFamily: 'PlusJakartaSans_700Bold',
+        color: '#fff',
+    },
+    headerActionText: {
+        fontSize: 16,
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+    },
+    editVideoOverlay: {
+        position: 'absolute',
+        bottom: 8,
+        left: 8,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 4,
+    },
+    editVideoText: {
+        color: '#fff',
+        fontSize: 10,
+        fontFamily: 'PlusJakartaSans_700Bold',
+    }
 });
 
 

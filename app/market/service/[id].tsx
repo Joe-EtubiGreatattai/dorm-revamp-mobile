@@ -2,7 +2,7 @@ import ActionSuccessModal from '@/components/ActionSuccessModal';
 import CustomLoader from '@/components/CustomLoader';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { marketAPI, walletAPI } from '@/utils/apiClient';
+import { API_URL, marketAPI, walletAPI } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -28,6 +28,16 @@ const PaystackLib = require('react-native-paystack-webview');
 const PaystackWebView = PaystackLib?.Paystack || PaystackLib?.default || PaystackLib;
 
 const { width } = Dimensions.get('window');
+
+// Helper to normalize image URLs
+const getMediaUri = (path?: string) => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    const normalizedPath = path.replace(/\\/g, '/');
+    const baseUrl = API_URL.replace(/\/api\/?$/, '');
+    const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath;
+    return `${baseUrl}/${cleanPath}`;
+};
 
 export default function ServiceDetail() {
     const { id } = useLocalSearchParams();
@@ -90,7 +100,7 @@ export default function ServiceDetail() {
     const seller = {
         id: sellerData?._id || 'unknown',
         name: sellerData?.name || 'Unknown User',
-        avatar: sellerData?.avatar || 'https://i.pravatar.cc/150',
+        avatar: getMediaUri(sellerData?.avatar) || 'https://i.pravatar.cc/150',
         university: sellerData?.university || 'Campus'
     };
 
@@ -192,7 +202,7 @@ export default function ServiceDetail() {
                         showsHorizontalScrollIndicator={false}
                         onScroll={onScroll}
                         renderItem={({ item: imageUrl }) => (
-                            <Image source={{ uri: imageUrl }} style={styles.sliderImage} />
+                            <Image source={{ uri: getMediaUri(imageUrl) || '' }} style={styles.sliderImage} />
                         )}
                     />
 
@@ -282,7 +292,7 @@ export default function ServiceDetail() {
                         style={[styles.sellerCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                         onPress={() => router.push(`/user/${seller.id}`)}
                     >
-                        <Image source={{ uri: seller.avatar || 'https://i.pravatar.cc/150' }} style={styles.sellerAvatar} />
+                        <Image source={{ uri: seller.avatar }} style={styles.sellerAvatar} />
                         <View style={styles.sellerInfo}>
                             <Text style={[styles.sellerName, { color: colors.text }]}>{seller.name || 'Unknown'}</Text>
                             <Text style={[styles.sellerSchool, { color: colors.subtext }]}>{seller.university || 'University'}</Text>

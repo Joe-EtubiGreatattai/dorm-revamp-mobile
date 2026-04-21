@@ -83,16 +83,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     const fontSizeMultiplier = FONT_SIZE_MULTIPLIERS[fontSize];
 
+    const value = React.useMemo(() => ({
+        theme: resolvedTheme,
+        themePreference,
+        fontSize,
+        fontSizeMultiplier,
+        setTheme,
+        setFontSize,
+        toggleTheme
+    }), [resolvedTheme, themePreference, fontSize, fontSizeMultiplier]);
+
     return (
-        <ThemeContext.Provider value={{
-            theme: resolvedTheme,
-            themePreference,
-            fontSize,
-            fontSizeMultiplier,
-            setTheme,
-            setFontSize,
-            toggleTheme
-        }}>
+        <ThemeContext.Provider value={value}>
             {children}
         </ThemeContext.Provider>
     );

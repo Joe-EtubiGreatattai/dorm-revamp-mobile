@@ -280,6 +280,15 @@ export default function MyProfileScreen() {
                                 {renderSettingItem('sparkles-outline', 'AI Auto-Responder', '/settings/ai_settings', colors.primary)}
                                 {renderSettingItem('color-palette-outline', 'Appearance', '/settings/preferences', '#f59e0b')}
                                 {renderSettingItem('lock-closed-outline', 'Privacy', '/settings/privacy', '#10b981')}
+
+                                {user.role === 'admin' && (
+                                    <>
+                                        <Text style={[styles.sectionTitleSmall, { color: colors.subtext, marginTop: 24 }]}>Administration</Text>
+                                        <View style={[styles.section, { backgroundColor: colors.card }]}>
+                                            {renderSettingItem('shield', 'Admin Dashboard', '/admin', '#ef4444')}
+                                        </View>
+                                    </>
+                                )}
                             </View>
 
                             {/* Support */}

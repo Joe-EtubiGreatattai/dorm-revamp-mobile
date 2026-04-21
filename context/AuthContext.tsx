@@ -52,6 +52,7 @@ type User = {
     aiSettings?: {
         enabled: boolean;
         aiName: string;
+        personality: string;
         customContext: string;
     };
 };

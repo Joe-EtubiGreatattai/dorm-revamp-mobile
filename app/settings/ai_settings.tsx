@@ -22,6 +22,7 @@ export default function AISettingsScreen() {
 
     const [isEnabled, setIsEnabled] = useState(user?.aiSettings?.enabled || false);
     const [aiName, setAiName] = useState(user?.aiSettings?.aiName || 'AI Assistant');
+    const [personality, setPersonality] = useState(user?.aiSettings?.personality || 'Friendly');
     const [customContext, setCustomContext] = useState(user?.aiSettings?.customContext || '');
     const [isSaving, setIsSaving] = useState(false);
     const [showNamingModal, setShowNamingModal] = useState(false);
@@ -33,6 +34,7 @@ export default function AISettingsScreen() {
             await aiAPI.updateSettings({
                 enabled: isEnabled,
                 aiName,
+                personality,
                 customContext
             });
             await refreshUser();
@@ -106,6 +108,52 @@ export default function AISettingsScreen() {
                             placeholder="e.g. Shop Assistant"
                             placeholderTextColor={colors.subtext}
                         />
+                    </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                    <Text style={[styles.sectionTitle, { color: colors.subtext }]}>AI Personality</Text>
+                    <Text style={[styles.helperText, { color: colors.subtext, marginBottom: 12 }]}>
+                        Choose a vibe for your AI responder. This affects how it talks and interacts!
+                    </Text>
+                    <View style={styles.personalityGrid}>
+                        {[
+                            { name: 'Friendly', icon: 'happy-outline', desc: 'Polite and helpful', example: 'Hey! I\'d be happy to help you with that. How\'s your day going?' },
+                            { name: 'Gen-Z', icon: 'flash-outline', desc: 'No cap, pure vibes', example: 'Omg hi! That\'s literally so real. No cap, let me check that for u rn! ✨' },
+                            { name: 'Sassy', icon: 'star-outline', desc: 'Witty and confident', example: 'Oh, you again? Just kidding! I suppose I could help you out if you ask nicely. 😉' },
+                            { name: 'Academic', icon: 'book-outline', desc: 'Smart and formal', example: 'Greetings. I have analyzed your inquiry and would be glad to provide a comprehensive response.' },
+                            { name: 'Supportive', icon: 'heart-outline', desc: 'Caring and sweet', example: 'Hi there! I\'m so glad you reached out. I\'m here to support you in any way I can. ❤️' },
+                        ].map((p) => (
+                            <TouchableOpacity
+                                key={p.name}
+                                onPress={() => {
+                                    setPersonality(p.name);
+                                    triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
+                                }}
+                                style={[
+                                    styles.personalityCard,
+                                    { backgroundColor: colors.card, borderColor: personality === p.name ? colors.primary : colors.border }
+                                ]}
+                            >
+                                <View style={[styles.personalityIcon, { backgroundColor: personality === p.name ? colors.primary + '15' : colors.background }]}>
+                                    <Ionicons name={p.icon as any} size={24} color={personality === p.name ? colors.primary : colors.subtext} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <View style={styles.personalityHeader}>
+                                        <Text style={[styles.personalityName, { color: colors.text }]}>{p.name}</Text>
+                                        {personality === p.name && <Ionicons name="checkmark-circle" size={16} color={colors.primary} />}
+                                    </View>
+                                    <Text style={[styles.personalityDesc, { color: colors.subtext }]}>{p.desc}</Text>
+                                    {personality === p.name && (
+                                        <View style={[styles.previewBubble, { backgroundColor: colors.background }]}>
+                                            <Text style={[styles.previewText, { color: colors.text }]} numberOfLines={2}>
+                                                "{p.example}"
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+                        ))}
                     </View>
                 </View>
 
@@ -239,5 +287,51 @@ const styles = StyleSheet.create({
     textArea: {
         height: 120,
         paddingTop: 0,
+    },
+    personalityGrid: {
+        gap: 12,
+    },
+    personalityCard: {
+        flexDirection: 'row',
+        padding: 16,
+        borderRadius: 20,
+        borderWidth: 1.5,
+        alignItems: 'center',
+        gap: 16,
+    },
+    personalityIcon: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    personalityHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 2,
+    },
+    personalityName: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 16,
+    },
+    personalityDesc: {
+        fontFamily: 'PlusJakartaSans_500Medium',
+        fontSize: 13,
+    },
+    previewBubble: {
+        marginTop: 8,
+        padding: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
+        borderStyle: 'dashed',
+    },
+    previewText: {
+        fontFamily: 'PlusJakartaSans_500Medium',
+        fontSize: 12,
+        fontStyle: 'italic',
+        lineHeight: 18,
     },
 });

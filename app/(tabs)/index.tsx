@@ -192,12 +192,16 @@ export default function FeedScreen() {
   };
 
 
-  // Deduplicate posts using a Map (by _id)
+  // Deduplicate posts and filter out posts from deleted users
   const filteredPosts = React.useMemo(() => {
     const uniquePosts = new Map();
     posts.forEach(post => {
       if (post && post._id) {
-        uniquePosts.set(post._id, post);
+        // Only filter out posts where user explicitly shows as "Unknown User"
+        const authorName = post.user?.name;
+        if (!authorName || authorName !== 'Unknown User') {
+          uniquePosts.set(post._id, post);
+        }
       }
     });
     return Array.from(uniquePosts.values());

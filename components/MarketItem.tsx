@@ -1,6 +1,7 @@
 import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { API_URL } from '@/utils/apiClient';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -9,6 +10,16 @@ import { Dimensions, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 48) / 2;
+
+// Helper to normalize image URLs
+const getMediaUri = (path?: string) => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    const normalizedPath = path.replace(/\\/g, '/');
+    const baseUrl = API_URL.replace(/\/api\/?$/, '');
+    const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath;
+    return `${baseUrl}/${cleanPath}`;
+};
 
 interface MarketItemProps {
     id?: string;
@@ -23,9 +34,7 @@ interface MarketItemProps {
 }
 
 export default function MarketItem({ item }: { item: MarketItemProps }) {
-    console.log(`📦 [MarketItem] Rendering item ${item?._id || item?.id}. COLUMN_WIDTH: ${COLUMN_WIDTH}, Device Width: ${width}`);
     if (!item || (!item.id && !item._id) || !item.title) {
-        console.log('⚠️ [MarketItem] Item rejected by guard:', { id: item?.id, _id: item?._id, hasTitle: !!item?.title });
         return null;
     }
     const colorScheme = useColorScheme();
@@ -45,7 +54,7 @@ export default function MarketItem({ item }: { item: MarketItemProps }) {
         >
             <View style={styles.imageContainer}>
                 <Image
-                    source={{ uri: item.images?.[0] || 'https://via.placeholder.com/300x200?text=No+Image' }}
+                    source={{ uri: getMediaUri(item.images?.[0]) || 'https://via.placeholder.com/300x200?text=No+Image' }}
                     style={styles.image}
                     contentFit="cover"
                 />

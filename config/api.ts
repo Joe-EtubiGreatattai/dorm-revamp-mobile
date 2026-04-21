@@ -1,7 +1,7 @@
 const PORT = '5001';
 
-// Production URL (Render)
-const PROD_URL = 'https://dorm-revamp-backend-j4ed.onrender.com';
+// Production URL (HTTPS)
+const PROD_URL = 'https://dorm-revamp.duckdns.org';
 
 // Local IP (For development)
 // const LOCAL_IP = '192.168.0.130';
@@ -9,7 +9,7 @@ const PROD_URL = 'https://dorm-revamp-backend-j4ed.onrender.com';
 // Use production URL
 export const API_URL = `${PROD_URL}/api`;
 export const SOCKET_URL = PROD_URL;
-export const PAYSTACK_PUBLIC_KEY = 'pk_test_a15103affe18985815a036f9092bc2ffe442b3d5';
+export const PAYSTACK_PUBLIC_KEY = 'pk_live_9c476b9f520955121693ca2e1bb8205d51462cfa';
 
 
 export default {

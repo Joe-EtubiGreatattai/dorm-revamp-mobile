@@ -72,6 +72,9 @@ export default function HousingDetail() {
 
     // Socket listener for real-time reviews
     React.useEffect(() => {
+        // Only set up socket if the listing exists and is loaded
+        if (!house || !house._id) return;
+
         const socket = getSocket();
         if (socket) {
             console.log('📡 [REVIEW] Setting up socket listener for listing:', id);
@@ -91,7 +94,7 @@ export default function HousingDetail() {
                 socket.off('review:new');
             };
         }
-    }, [id]);
+    }, [id, house]);
 
     // Check if user has already requested a tour
     React.useEffect(() => {

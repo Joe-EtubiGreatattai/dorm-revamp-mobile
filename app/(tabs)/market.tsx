@@ -97,9 +97,9 @@ export default function MarketScreen() {
         });
         return Array.from(uniqueItems.values());
     }, [data?.pages]);
-    console.log(`🛒 [Frontend] Total items in market state: ${items.length}`);
+
     if (items.length > 0) {
-        console.log('🛒 [Frontend] First item preview:', JSON.stringify(items[0], null, 2));
+        // console.log('🛒 [Frontend] First item preview:', JSON.stringify(items[0], null, 2));
     }
 
     // Active Orders Query
@@ -222,10 +222,7 @@ export default function MarketScreen() {
             <FlatList
                 data={items}
                 keyExtractor={(item) => item._id || item.id}
-                renderItem={({ item, index }) => {
-                    console.log(`🛒 [Frontend] Rendering item at index ${index}:`, item?._id || item?.id);
-                    return <MarketItem item={item} />;
-                }}
+                renderItem={({ item }) => <MarketItem item={item} />}
                 numColumns={2}
                 columnWrapperStyle={styles.row}
                 contentContainerStyle={styles.listContent}
@@ -233,8 +230,11 @@ export default function MarketScreen() {
                 style={styles.flatList}
                 refreshing={isRefetching}
                 onRefresh={onRefresh}
+                initialNumToRender={6}
+                windowSize={5}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={6}
                 ListHeaderComponent={() => {
-                    console.log('🛒 [Frontend] Rendering ListHeaderComponent');
                     return (
                         <View style={styles.categoriesContainer}>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false}>

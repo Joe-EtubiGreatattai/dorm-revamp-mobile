@@ -179,6 +179,10 @@ export default function HousingScreen() {
                         showsVerticalScrollIndicator={false}
                         refreshing={isRefetching}
                         onRefresh={onRefresh}
+                        initialNumToRender={5}
+                        windowSize={5}
+                        removeClippedSubviews={true}
+                        maxToRenderPerBatch={5}
                         ListEmptyComponent={
                             isLoading ? null : (
                                 <EmptyState

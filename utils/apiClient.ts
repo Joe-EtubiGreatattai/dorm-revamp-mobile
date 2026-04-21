@@ -124,6 +124,8 @@ export const authAPI = {
         let type = 'image/jpeg';
         if (['mp4', 'mov', 'm4v', 'avi'].includes(ext)) {
             type = `video/${ext === 'mov' ? 'quicktime' : 'mp4'}`;
+        } else if (['mp3', 'wav', 'm4a', 'aac', 'ogg'].includes(ext)) {
+            type = `audio/${ext === 'mp3' ? 'mpeg' : ext}`;
         } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
             type = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
         }
@@ -195,7 +197,7 @@ export const postAPI = {
             timeout: 60000 // 60 seconds specifically for post creation with images
         }),
 
-    updatePost: (id: string, data: { content?: string; images?: string[]; visibility?: string }) =>
+    updatePost: (id: string, data: { content?: string; images?: string[]; locations?: string[]; visibility?: string }) =>
         apiClient.put(`/posts/${id}`, data),
 
     deletePost: (id: string) =>
@@ -228,7 +230,7 @@ export const commentAPI = {
     getComments: (postId: string) =>
         apiClient.get(`/comments/post/${postId}`),
 
-    createComment: (data: { postId: string; content: string; parentCommentId?: string }) =>
+    createComment: (data: { postId: string; content?: string; image?: string; audio?: string; parentCommentId?: string }) =>
         apiClient.post('/comments', data),
 
     updateComment: (id: string, data: { content: string }) =>
@@ -344,8 +346,8 @@ export const tourAPI = {
 
 // ============ NOTIFICATION ENDPOINTS ============
 export const notificationAPI = {
-    getNotifications: () =>
-        apiClient.get('/notifications'),
+    getNotifications: (page = 1, limit = 50) =>
+        apiClient.get('/notifications', { params: { page, limit } }),
 
     getNotification: (id: string) =>
         apiClient.get(`/notifications/${id}`),
@@ -532,7 +534,7 @@ export const aiAPI = {
 
     generateCBT: (data: { materialId?: string; textContent?: string; numQuestions?: number }) =>
         apiClient.post('/ai/generate-cbt', data),
-    updateSettings: (data: { enabled: boolean; aiName: string; customContext: string }) =>
+    updateSettings: (data: { enabled: boolean; aiName: string; customContext: string, personality: string }) =>
         apiClient.put('/ai/settings', data),
 };
 

@@ -50,7 +50,7 @@ export default function SelectUserScreen() {
         (u.university && u.university.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
-    const handleSelectUser = useThrottledCallback(async (userId: string) => {
+    const handleSelectUser = async (userId: string) => {
         if (creatingChat) return;
         setCreatingChat(true);
         try {
@@ -62,7 +62,7 @@ export default function SelectUserScreen() {
         } finally {
             setCreatingChat(false);
         }
-    }, 1000);
+    };
 
     const renderItem = ({ item }: { item: any }) => (
         <TouchableOpacity

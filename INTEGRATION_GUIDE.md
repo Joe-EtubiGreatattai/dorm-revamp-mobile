@@ -210,7 +210,7 @@ export default function FeedScreen() {
 curl https://dorm-revamp-backend-j4ed.onrender.com/api/auth/me
 
 # Or test in browser
-https://dorm-revamp-backend-j4ed.onrender.com
+https://dorm-revamp.duckdns.org
 ```
 
 ## Troubleshooting

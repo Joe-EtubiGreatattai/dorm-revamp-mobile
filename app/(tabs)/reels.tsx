@@ -1,29 +1,46 @@
+import AudioPlayer from '@/components/AudioPlayer';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
-import { commentAPI, postAPI } from '@/utils/apiClient';
+import { useIsMounted } from '@/hooks/useIsMounted';
+import { useThrottledCallback } from '@/hooks/useThrottledCallback';
+import { API_URL, authAPI, commentAPI, postAPI } from '@/utils/apiClient';
 import { getSocket } from '@/utils/socket';
 import { Ionicons } from '@expo/vector-icons';
-import { ResizeMode, Video } from 'expo-av';
+import { useIsFocused } from '@react-navigation/native';
+import { Audio, ResizeMode, Video } from 'expo-av';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, Share, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+// Helper to normalize image URLs
+const getMediaUri = (path?: string) => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    const normalizedPath = path.replace(/\\/g, '/');
+    const baseUrl = API_URL.replace(/\/api\/?$/, '');
+    const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath;
+    return `${baseUrl}/${cleanPath}`;
+};
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const ReelItem = React.memo(({ item, isActive, isMuted, toggleMute, onVideoEnd, autoScroll, toggleAutoScroll, screenHeight }: {
+const ReelItem = React.memo(({ item, isActive, isScreenFocused, isMuted, toggleMute, onVideoEnd, autoScroll, toggleAutoScroll, screenHeight, onDragChange }: {
     item: any,
     isActive: boolean,
+    isScreenFocused: boolean,
     isMuted: boolean,
     toggleMute: () => void,
     onVideoEnd: () => void,
     autoScroll: boolean,
     toggleAutoScroll: () => void,
-    screenHeight: number
+    screenHeight: number,
+    onDragChange: (isDragging: boolean) => void
 }) => {
     const videoRef = useRef<Video>(null);
     const { user: currentUser } = useAuth();
@@ -31,7 +48,10 @@ const ReelItem = React.memo(({ item, isActive, isMuted, toggleMute, onVideoEnd, 
     const [liked, setLiked] = useState(item.likes?.includes(currentUser?._id));
     const [likesCount, setLikesCount] = useState(item.likes?.length || 0);
     const [isPaused, setIsPaused] = useState(false);
+    const [status, setStatus] = useState<any>({});
+    const [isDragging, setIsDragging] = useState(false);
     const [showCommentModal, setShowCommentModal] = useState(false);
+    const isMounted = useIsMounted();
 
     useEffect(() => {
         setLiked(item.likes?.includes(currentUser?._id));
@@ -39,16 +59,20 @@ const ReelItem = React.memo(({ item, isActive, isMuted, toggleMute, onVideoEnd, 
     }, [item.likes, currentUser?._id]);
 
     useEffect(() => {
-        if (!isActive) {
+        if (!isActive || !isScreenFocused) {
             videoRef.current?.pauseAsync();
         } else {
-            // When becoming active again, ensure we start from the beginning if it was finished
-            videoRef.current?.setPositionAsync(0);
+            // Only play if both item is active AND screen is focused
             if (!isPaused) {
                 videoRef.current?.playAsync();
             }
         }
-    }, [isActive, isPaused]);
+
+        // Cleanup: pause and unload when component unmounts or becomes totally inactive
+        return () => {
+            videoRef.current?.pauseAsync();
+        };
+    }, [isActive, isScreenFocused, isPaused]);
 
     const handleLike = async () => {
         const prevLiked = liked;
@@ -57,8 +81,10 @@ const ReelItem = React.memo(({ item, isActive, isMuted, toggleMute, onVideoEnd, 
         try {
             await postAPI.likePost(item._id);
         } catch (error) {
-            setLiked(prevLiked);
-            setLikesCount(item.likes?.length || 0);
+            if (isMounted.current) {
+                setLiked(prevLiked);
+                setLikesCount(item.likes?.length || 0);
+            }
         }
     };
 
@@ -76,7 +102,7 @@ const ReelItem = React.memo(({ item, isActive, isMuted, toggleMute, onVideoEnd, 
         } catch (error) { }
     };
 
-    const handleProfilePress = () => {
+    const handleProfilePress = useThrottledCallback(() => {
         if (item.user?._id && item.user._id !== 'anonymous') {
             if (currentUser?._id === item.user._id) {
                 router.push('/profile');
@@ -84,16 +110,50 @@ const ReelItem = React.memo(({ item, isActive, isMuted, toggleMute, onVideoEnd, 
                 router.push(`/user/${item.user._id}`);
             }
         }
-    };
+    }, 1000);
 
     const togglePlayPause = () => {
         setIsPaused(!isPaused);
     };
 
     const onPlaybackStatusUpdate = (status: any) => {
+        if (!status.isLoaded) return;
+        setStatus(status);
         if (status.didJustFinish && autoScroll) {
             onVideoEnd();
         }
+    };
+
+    const getProgress = () => {
+        if (status.durationMillis > 0 && status.positionMillis > 0) {
+            return (status.positionMillis / status.durationMillis) * 100;
+        }
+        return 0;
+    };
+
+    const handleSeek = async (e: any) => {
+        if (!status.durationMillis) return;
+        const { pageX } = e.nativeEvent;
+        const progress = Math.max(0, Math.min(1, pageX / SCREEN_WIDTH));
+        const seekPosition = progress * status.durationMillis;
+        await videoRef.current?.setPositionAsync(seekPosition);
+    };
+
+    const handleDragSeek = async (e: any) => {
+        if (!status.durationMillis) return;
+        const { pageX } = e.nativeEvent;
+        const progress = Math.max(0, Math.min(1, pageX / SCREEN_WIDTH));
+        const seekPosition = progress * status.durationMillis;
+        // Optimization: use setPositionAsync with seeks to be more responsive
+        await videoRef.current?.setPositionAsync(seekPosition, { toleranceMillisBefore: 0, toleranceMillisAfter: 0 });
+    };
+
+    const formatTime = (millis: number) => {
+        if (!millis || millis < 0) return '00:00';
+        const totalSeconds = Math.floor(millis / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
     return (
@@ -105,10 +165,10 @@ const ReelItem = React.memo(({ item, isActive, isMuted, toggleMute, onVideoEnd, 
             >
                 <Video
                     ref={videoRef}
-                    source={{ uri: item.video }}
+                    source={{ uri: getMediaUri(item.video) || '' }}
                     style={styles.video}
                     resizeMode={ResizeMode.COVER}
-                    shouldPlay={isActive && !isPaused}
+                    shouldPlay={isActive && isScreenFocused && !isPaused}
                     isLooping={!autoScroll}
                     isMuted={isMuted}
                     onPlaybackStatusUpdate={onPlaybackStatusUpdate}
@@ -140,7 +200,7 @@ const ReelItem = React.memo(({ item, isActive, isMuted, toggleMute, onVideoEnd, 
                 <View style={styles.rightSection}>
                     <TouchableOpacity style={styles.rightButton} onPress={handleProfilePress}>
                         <Image
-                            source={{ uri: item.user?.avatar || 'https://ui-avatars.com/api/?name=' + (item.user?.name || 'U') }}
+                            source={{ uri: getMediaUri(item.user?.avatar) || 'https://ui-avatars.com/api/?name=' + (item.user?.name || 'U') }}
                             style={styles.avatar}
                         />
                         {currentUser?._id !== item.user?._id && !item.isAnonymous && !currentUser?.following?.includes(item.user?._id) && (
@@ -188,12 +248,47 @@ const ReelItem = React.memo(({ item, isActive, isMuted, toggleMute, onVideoEnd, 
                 </View>
             </View>
 
+            {/* Draggable Progress Bar */}
+            <View
+                style={styles.progressBarWrapper}
+                onStartShouldSetResponder={() => true}
+                onMoveShouldSetResponder={() => true}
+                onResponderGrant={(e) => {
+                    setIsDragging(true);
+                    onDragChange(true);
+                    videoRef.current?.pauseAsync();
+                    handleDragSeek(e);
+                }}
+                onResponderMove={(e) => {
+                    handleDragSeek(e);
+                }}
+                onResponderRelease={() => {
+                    setIsDragging(false);
+                    onDragChange(false);
+                    if (!isPaused) {
+                        videoRef.current?.playAsync();
+                    }
+                }}
+            >
+                {isDragging && (
+                    <View style={styles.seekTimeIndicator}>
+                        <Text style={styles.seekTimeText}>
+                            {formatTime(status.positionMillis)} / {formatTime(status.durationMillis)}
+                        </Text>
+                    </View>
+                )}
+                <View style={[styles.progressBarBackground, isDragging && styles.progressBarBackgroundActive]}>
+                    <View style={[styles.progressBarFill, { width: `${getProgress()}%` }]} />
+                    {isDragging && <View style={[styles.progressHandle, { left: `${getProgress()}%` }]} />}
+                </View>
+            </View>
+
             <CommentsModal
                 visible={showCommentModal}
                 onClose={() => setShowCommentModal(false)}
                 postId={item._id}
             />
-        </View>
+        </View >
     );
 });
 
@@ -204,11 +299,20 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
     const [replyingTo, setReplyingTo] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(false);
+
+    // Media Comment State
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [recordedUri, setRecordedUri] = useState<string | null>(null);
+    const [recording, setRecording] = useState<Audio.Recording | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+
     const inputRef = useRef<TextInput>(null);
     const insets = useSafeAreaInsets();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
     const { showAlert } = useAlert();
+    const isMounted = useIsMounted();
 
     useEffect(() => {
         if (visible) {
@@ -236,25 +340,89 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
         setIsFetching(true);
         try {
             const res = await commentAPI.getComments(postId);
-            setComments(res.data);
+            if (isMounted.current) {
+                setComments(res.data);
+            }
         } catch (error) {
             console.error('Error fetching comments:', error);
         } finally {
-            setIsFetching(false);
+            if (isMounted.current) {
+                setIsFetching(false);
+            }
+        }
+    };
+
+    const pickCommentImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 0.7,
+        });
+
+        if (!result.canceled) {
+            setSelectedImage(result.assets[0].uri);
+            setRecordedUri(null); // Clear audio if image selected
+        }
+    };
+
+    const startRecording = async () => {
+        try {
+            const permission = await Audio.requestPermissionsAsync();
+            if (permission.status === 'granted') {
+                await Audio.setAudioModeAsync({
+                    allowsRecordingIOS: true,
+                    playsInSilentModeIOS: true,
+                });
+                const { recording } = await Audio.Recording.createAsync(
+                    Audio.RecordingOptionsPresets.HIGH_QUALITY
+                );
+                setRecording(recording);
+                setIsRecording(true);
+            }
+        } catch (err) {
+            console.error('Failed to start recording', err);
+        }
+    };
+
+    const stopRecording = async () => {
+        setIsRecording(false);
+        if (!recording) return;
+        try {
+            await recording.stopAndUnloadAsync();
+            const uri = recording.getURI();
+            setRecordedUri(uri);
+            setRecording(null);
+            setSelectedImage(null); // Clear image if audio recorded
+        } catch (err) {
+            console.error('Failed to stop recording', err);
         }
     };
 
     const handlePostComment = async () => {
-        if (!newComment.trim()) return;
+        if (!newComment.trim() && !selectedImage && !recordedUri) return;
         setLoading(true);
+        setIsUploadingMedia(true);
 
         const parentId = replyingTo?._id || replyingTo?.id;
         const currentContent = newComment;
 
         try {
+            let imageUrl = '';
+            let audioUrl = '';
+
+            if (selectedImage) {
+                imageUrl = await authAPI.uploadImage(selectedImage);
+            }
+            if (recordedUri) {
+                audioUrl = await authAPI.uploadImage(recordedUri);
+            }
+
             const res = await commentAPI.createComment({
                 postId,
                 content: currentContent,
+                image: imageUrl || undefined,
+                audio: audioUrl || undefined,
                 parentCommentId: parentId
             });
 
@@ -285,6 +453,8 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
 
             setNewComment('');
             setReplyingTo(null);
+            setSelectedImage(null);
+            setRecordedUri(null);
             Keyboard.dismiss();
         } catch (error: any) {
             console.error('Error posting comment:', error);
@@ -296,6 +466,7 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
             });
         } finally {
             setLoading(false);
+            setIsUploadingMedia(false);
         }
     };
 
@@ -395,12 +566,19 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
                                     <View style={styles.commentItemContainer}>
                                         <View style={styles.commentItem}>
                                             <Image
-                                                source={{ uri: (item.user?.avatar || item.userId?.avatar) || 'https://ui-avatars.com/api/?name=' + ((item.user?.name || item.userId?.name) || 'U') }}
+                                                source={{ uri: getMediaUri(item.user?.avatar || item.userId?.avatar) || 'https://ui-avatars.com/api/?name=' + ((item.user?.name || item.userId?.name) || 'U') }}
                                                 style={styles.commentAvatar}
                                             />
                                             <View style={styles.commentTextContainer}>
                                                 <Text style={styles.commentUser}>{(item.user?.name || item.userId?.name) || 'Anonymous'}</Text>
                                                 <Text style={styles.commentText}>{item.content}</Text>
+
+                                                {item.image && (
+                                                    <Image source={{ uri: getMediaUri(item.image) || '' }} style={styles.commentImage} contentFit="cover" />
+                                                )}
+                                                {item.audio && (
+                                                    <AudioPlayer uri={getMediaUri(item.audio) || ''} accentColor="#ff2d55" />
+                                                )}
 
                                                 <View style={styles.commentActions}>
                                                     <TouchableOpacity
@@ -432,12 +610,19 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
                                         {item.replies && item.replies.map((reply: any) => (
                                             <View key={reply._id} style={styles.replyItem}>
                                                 <Image
-                                                    source={{ uri: (reply.user?.avatar || reply.userId?.avatar) || 'https://ui-avatars.com/api/?name=' + ((reply.user?.name || reply.userId?.name) || 'U') }}
+                                                    source={{ uri: getMediaUri(reply.user?.avatar || reply.userId?.avatar) || 'https://ui-avatars.com/api/?name=' + ((reply.user?.name || reply.userId?.name) || 'U') }}
                                                     style={styles.replyAvatar}
                                                 />
                                                 <View style={styles.commentTextContainer}>
                                                     <Text style={styles.commentUser}>{(reply.user?.name || reply.userId?.name) || 'Anonymous'}</Text>
                                                     <Text style={styles.commentText}>{reply.content}</Text>
+
+                                                    {reply.image && (
+                                                        <Image source={{ uri: getMediaUri(reply.image) || '' }} style={styles.commentImage} contentFit="cover" />
+                                                    )}
+                                                    {reply.audio && (
+                                                        <AudioPlayer uri={getMediaUri(reply.audio) || ''} accentColor="#ff2d55" />
+                                                    )}
                                                     <View style={styles.commentActions}>
                                                         <TouchableOpacity
                                                             style={styles.commentAction}
@@ -486,22 +671,61 @@ const CommentsModal = ({ visible, onClose, postId }: { visible: boolean, onClose
                             </View>
                         )}
 
+                        {/* Media Preview */}
+                        {(selectedImage || recordedUri) && (
+                            <View style={styles.mediaPreview}>
+                                {selectedImage && (
+                                    <View style={styles.previewItem}>
+                                        <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
+                                        <TouchableOpacity style={styles.removeMedia} onPress={() => setSelectedImage(null)}>
+                                            <Ionicons name="close-circle" size={20} color="#000" />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                                {recordedUri && (
+                                    <View style={styles.previewItem}>
+                                        <View style={[styles.audioPreview, { backgroundColor: '#ff2d5520' }]}>
+                                            <Ionicons name="mic" size={16} color="#ff2d55" />
+                                            <Text style={{ color: '#ff2d55', fontSize: 11, fontFamily: 'PlusJakartaSans_600SemiBold' }}>Voice Note</Text>
+                                        </View>
+                                        <TouchableOpacity style={styles.removeMedia} onPress={() => setRecordedUri(null)}>
+                                            <Ionicons name="close-circle" size={20} color="#000" />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                            </View>
+                        )}
+
                         <View style={[styles.commentInputContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+                            <View style={styles.composerActions}>
+                                <TouchableOpacity onPress={pickCommentImage} disabled={isRecording || isUploadingMedia}>
+                                    <Ionicons name="image-outline" size={24} color="#666" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPressIn={startRecording}
+                                    onPressOut={stopRecording}
+                                    disabled={isUploadingMedia}
+                                >
+                                    <Ionicons name="mic-outline" size={24} color={isRecording ? "#ff2d55" : "#666"} />
+                                </TouchableOpacity>
+                            </View>
+
                             <TextInput
                                 ref={inputRef}
                                 style={styles.commentInput}
-                                placeholder={replyingTo ? "Add a reply..." : "Add a comment..."}
+                                placeholder={isRecording ? "Recording..." : (replyingTo ? "Add a reply..." : "Add a comment...")}
                                 placeholderTextColor="#999"
                                 value={newComment}
                                 onChangeText={setNewComment}
                                 multiline
+                                editable={!isRecording && !isUploadingMedia}
                             />
                             <TouchableOpacity
-                                style={[styles.postButton, !newComment.trim() && { opacity: 0.5 }]}
+                                style={[styles.postButton, (!newComment.trim() && !selectedImage && !recordedUri) && { opacity: 0.5 }]}
                                 onPress={handlePostComment}
-                                disabled={!newComment.trim() || loading}
+                                disabled={(!newComment.trim() && !selectedImage && !recordedUri) || loading || isUploadingMedia}
                             >
-                                {loading ? <ActivityIndicator size="small" color="#ff2d55" /> : <Text style={styles.postButtonText}>Post</Text>}
+                                {loading || isUploadingMedia ? <ActivityIndicator size="small" color="#ff2d55" /> : <Text style={styles.postButtonText}>Post</Text>}
                             </TouchableOpacity>
                         </View>
                     </KeyboardAvoidingView>
@@ -526,6 +750,8 @@ export default function ReelsScreen() {
     const { height: windowHeight, width: windowWidth } = useWindowDimensions();
     const [screenHeight, setScreenHeight] = useState(windowHeight);
     const [showToast, setShowToast] = useState(true);
+    const [isDraggingSeek, setIsDraggingSeek] = useState(false);
+    const isFocused = useIsFocused();
 
     useEffect(() => {
         const socket = getSocket();
@@ -618,20 +844,21 @@ export default function ReelsScreen() {
 
             <TouchableOpacity
                 style={[styles.backButton, { top: insets.top + 10 }]}
-                onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
+                onPress={() => router.back()}
             >
                 <Ionicons name="arrow-back" size={28} color="#fff" />
             </TouchableOpacity>
 
             {showToast && (
                 <View style={[styles.toast, { top: insets.top + 15 }]}>
-                    <Text style={styles.toastText}>Entering Immersive Mode</Text>
+                    <Text style={styles.toastText}>Reels</Text>
                 </View>
             )}
 
             <FlatList
                 ref={flatListRef}
                 data={videos}
+                scrollEnabled={!isDraggingSeek}
                 onLayout={(e) => {
                     const { height } = e.nativeEvent.layout;
                     if (height > 0) setScreenHeight(height);
@@ -640,12 +867,14 @@ export default function ReelsScreen() {
                     <ReelItem
                         item={item}
                         isActive={index === activeIndex}
+                        isScreenFocused={isFocused}
                         isMuted={isMuted}
                         toggleMute={() => setIsMuted(!isMuted)}
                         onVideoEnd={handleVideoEnd}
                         autoScroll={autoScroll}
                         toggleAutoScroll={() => setAutoScroll(!autoScroll)}
                         screenHeight={screenHeight}
+                        onDragChange={setIsDraggingSeek}
                     />
                 )}
                 keyExtractor={item => item._id}
@@ -663,6 +892,10 @@ export default function ReelsScreen() {
                 viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
                 onEndReached={() => fetchVideos(page + 1)}
                 onEndReachedThreshold={0.5}
+                windowSize={3}
+                initialNumToRender={1}
+                maxToRenderPerBatch={2}
+                removeClippedSubviews={Platform.OS === 'android'}
                 ListFooterComponent={isLoading ? <ActivityIndicator color="#fff" style={{ margin: 20 }} /> : null}
             />
         </View>
@@ -694,7 +927,7 @@ const styles = StyleSheet.create({
     overlay: {
         ...StyleSheet.absoluteFillObject,
         justifyContent: 'flex-end',
-        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+        paddingBottom: 15,
         paddingHorizontal: 15,
     },
     backButton: {
@@ -959,5 +1192,95 @@ const styles = StyleSheet.create({
     loadingText: {
         fontSize: 14,
         fontFamily: 'PlusJakartaSans_500Medium',
+    },
+    commentImage: {
+        width: '100%',
+        aspectRatio: 4 / 3,
+        borderRadius: 12,
+        marginTop: 8,
+        marginBottom: 4,
+    },
+    composerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginRight: 10,
+    },
+    mediaPreview: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingBottom: 8,
+        backgroundColor: '#fff',
+    },
+    previewItem: {
+        position: 'relative',
+    },
+    imagePreview: {
+        width: 60,
+        height: 60,
+        borderRadius: 8,
+    },
+    audioPreview: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        padding: 8,
+        borderRadius: 8,
+    },
+    removeMedia: {
+        position: 'absolute',
+        top: -8,
+        right: -8,
+        backgroundColor: 'rgba(255,255,255,0.8)',
+        borderRadius: 10,
+    },
+    progressBarWrapper: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 60, // Larger touch target
+        justifyContent: 'flex-end',
+        zIndex: 100,
+    },
+    progressBarBackground: {
+        width: '100%',
+        height: 3,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    progressBarBackgroundActive: {
+        height: 6, // Thicker when dragging
+    },
+    progressBarFill: {
+        height: '100%',
+        backgroundColor: '#ff2d55',
+    },
+    progressHandle: {
+        position: 'absolute',
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: '#ff2d55',
+        marginLeft: -8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 2,
+        elevation: 3,
+    },
+    seekTimeIndicator: {
+        alignSelf: 'center',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 15,
+        marginBottom: 20,
+    },
+    seekTimeText: {
+        color: '#fff',
+        fontSize: 14,
+        fontFamily: 'PlusJakartaSans_700Bold',
     },
 });
